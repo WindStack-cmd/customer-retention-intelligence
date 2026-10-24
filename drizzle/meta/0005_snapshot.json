@@ -1,0 +1,3131 @@
+{
+  "version": "5",
+  "dialect": "mysql",
+  "id": "1f5dbf6d-4cac-43ae-b5e6-f0ecf9ec3a82",
+  "prevId": "d1239dfb-a1a2-4448-aa04-f520c3af6596",
+  "tables": {
+    "churn_model_metrics": {
+      "name": "churn_model_metrics",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "modelRunId": {
+          "name": "modelRunId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "split": {
+          "name": "split",
+          "type": "varchar(30)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "metricName": {
+          "name": "metricName",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "metricValue": {
+          "name": "metricValue",
+          "type": "decimal(18,10)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "metricJson": {
+          "name": "metricJson",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "churn_model_metrics_unique": {
+          "name": "churn_model_metrics_unique",
+          "columns": [
+            "modelRunId",
+            "split",
+            "metricName"
+          ],
+          "isUnique": true
+        },
+        "churn_model_metrics_run_idx": {
+          "name": "churn_model_metrics_run_idx",
+          "columns": [
+            "modelRunId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "churn_model_metrics_modelRunId_churn_model_runs_id_fk": {
+          "name": "churn_model_metrics_modelRunId_churn_model_runs_id_fk",
+          "tableFrom": "churn_model_metrics",
+          "tableTo": "churn_model_runs",
+          "columnsFrom": [
+            "modelRunId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "churn_model_metrics_id": {
+          "name": "churn_model_metrics_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "churn_model_runs": {
+      "name": "churn_model_runs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "runKey": {
+          "name": "runKey",
+          "type": "varchar(220)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "modelName": {
+          "name": "modelName",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "modelVersion": {
+          "name": "modelVersion",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "featureVersion": {
+          "name": "featureVersion",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "labelVersion": {
+          "name": "labelVersion",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "datasetVersion": {
+          "name": "datasetVersion",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provenanceId": {
+          "name": "provenanceId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "trainStartAt": {
+          "name": "trainStartAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "trainEndAt": {
+          "name": "trainEndAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "validationStartAt": {
+          "name": "validationStartAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "validationEndAt": {
+          "name": "validationEndAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "testStartAt": {
+          "name": "testStartAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "testEndAt": {
+          "name": "testEndAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "threshold": {
+          "name": "threshold",
+          "type": "decimal(12,8)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(40)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "configJson": {
+          "name": "configJson",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "artifactPath": {
+          "name": "artifactPath",
+          "type": "varchar(300)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "artifactSha256": {
+          "name": "artifactSha256",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "churn_model_runs_key_unique": {
+          "name": "churn_model_runs_key_unique",
+          "columns": [
+            "runKey"
+          ],
+          "isUnique": true
+        },
+        "churn_model_runs_provenance_idx": {
+          "name": "churn_model_runs_provenance_idx",
+          "columns": [
+            "provenanceId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "churn_model_runs_provenanceId_data_provenance_id_fk": {
+          "name": "churn_model_runs_provenanceId_data_provenance_id_fk",
+          "tableFrom": "churn_model_runs",
+          "tableTo": "data_provenance",
+          "columnsFrom": [
+            "provenanceId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "churn_model_runs_id": {
+          "name": "churn_model_runs_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "churn_predictions": {
+      "name": "churn_predictions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "modelRunId": {
+          "name": "modelRunId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "snapshotId": {
+          "name": "snapshotId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "customerId": {
+          "name": "customerId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoffAt": {
+          "name": "cutoffAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rawProbability": {
+          "name": "rawProbability",
+          "type": "decimal(12,8)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "calibratedProbability": {
+          "name": "calibratedProbability",
+          "type": "decimal(12,8)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "predictedClass": {
+          "name": "predictedClass",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "threshold": {
+          "name": "threshold",
+          "type": "decimal(12,8)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "predictionVersion": {
+          "name": "predictionVersion",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "churn_predictions_unique": {
+          "name": "churn_predictions_unique",
+          "columns": [
+            "modelRunId",
+            "snapshotId"
+          ],
+          "isUnique": true
+        },
+        "churn_predictions_customer_idx": {
+          "name": "churn_predictions_customer_idx",
+          "columns": [
+            "customerId",
+            "cutoffAt"
+          ],
+          "isUnique": false
+        },
+        "churn_predictions_run_idx": {
+          "name": "churn_predictions_run_idx",
+          "columns": [
+            "modelRunId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "churn_predictions_modelRunId_churn_model_runs_id_fk": {
+          "name": "churn_predictions_modelRunId_churn_model_runs_id_fk",
+          "tableFrom": "churn_predictions",
+          "tableTo": "churn_model_runs",
+          "columnsFrom": [
+            "modelRunId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "churn_predictions_snapshotId_customer_feature_snapshots_id_fk": {
+          "name": "churn_predictions_snapshotId_customer_feature_snapshots_id_fk",
+          "tableFrom": "churn_predictions",
+          "tableTo": "customer_feature_snapshots",
+          "columnsFrom": [
+            "snapshotId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "churn_predictions_customerId_customers_id_fk": {
+          "name": "churn_predictions_customerId_customers_id_fk",
+          "tableFrom": "churn_predictions",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customerId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "churn_predictions_id": {
+          "name": "churn_predictions_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "customer_behavior_labels": {
+      "name": "customer_behavior_labels",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "snapshotId": {
+          "name": "snapshotId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "runId": {
+          "name": "runId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provenanceId": {
+          "name": "provenanceId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "customerId": {
+          "name": "customerId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoffAt": {
+          "name": "cutoffAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "horizonEndAt": {
+          "name": "horizonEndAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "labelVersion": {
+          "name": "labelVersion",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "inactivityLabel": {
+          "name": "inactivityLabel",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "futureOrderCount": {
+          "name": "futureOrderCount",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "labelable": {
+          "name": "labelable",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "customer_behavior_labels_snapshot_unique": {
+          "name": "customer_behavior_labels_snapshot_unique",
+          "columns": [
+            "snapshotId"
+          ],
+          "isUnique": true
+        },
+        "customer_behavior_labels_customer_cutoff_unique": {
+          "name": "customer_behavior_labels_customer_cutoff_unique",
+          "columns": [
+            "customerId",
+            "cutoffAt",
+            "labelVersion"
+          ],
+          "isUnique": true
+        },
+        "customer_behavior_labels_run_idx": {
+          "name": "customer_behavior_labels_run_idx",
+          "columns": [
+            "runId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "customer_behavior_labels_snapshotId_customer_feature_snapshots_id_fk": {
+          "name": "customer_behavior_labels_snapshotId_customer_feature_snapshots_id_fk",
+          "tableFrom": "customer_behavior_labels",
+          "tableTo": "customer_feature_snapshots",
+          "columnsFrom": [
+            "snapshotId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "customer_behavior_labels_runId_customer_feature_runs_id_fk": {
+          "name": "customer_behavior_labels_runId_customer_feature_runs_id_fk",
+          "tableFrom": "customer_behavior_labels",
+          "tableTo": "customer_feature_runs",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "customer_behavior_labels_provenanceId_data_provenance_id_fk": {
+          "name": "customer_behavior_labels_provenanceId_data_provenance_id_fk",
+          "tableFrom": "customer_behavior_labels",
+          "tableTo": "data_provenance",
+          "columnsFrom": [
+            "provenanceId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "customer_behavior_labels_customerId_customers_id_fk": {
+          "name": "customer_behavior_labels_customerId_customers_id_fk",
+          "tableFrom": "customer_behavior_labels",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customerId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "customer_behavior_labels_id": {
+          "name": "customer_behavior_labels_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "customer_feature_runs": {
+      "name": "customer_feature_runs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "provenanceId": {
+          "name": "provenanceId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "runKey": {
+          "name": "runKey",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "featureVersion": {
+          "name": "featureVersion",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoffAt": {
+          "name": "cutoffAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "horizonDays": {
+          "name": "horizonDays",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "observationStartAt": {
+          "name": "observationStartAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "observationEndAt": {
+          "name": "observationEndAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "generatedAt": {
+          "name": "generatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "customer_feature_runs_key_unique": {
+          "name": "customer_feature_runs_key_unique",
+          "columns": [
+            "runKey"
+          ],
+          "isUnique": true
+        },
+        "customer_feature_runs_provenance_idx": {
+          "name": "customer_feature_runs_provenance_idx",
+          "columns": [
+            "provenanceId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "customer_feature_runs_provenanceId_data_provenance_id_fk": {
+          "name": "customer_feature_runs_provenanceId_data_provenance_id_fk",
+          "tableFrom": "customer_feature_runs",
+          "tableTo": "data_provenance",
+          "columnsFrom": [
+            "provenanceId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "customer_feature_runs_id": {
+          "name": "customer_feature_runs_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "customer_feature_snapshots": {
+      "name": "customer_feature_snapshots",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "runId": {
+          "name": "runId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provenanceId": {
+          "name": "provenanceId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "customerId": {
+          "name": "customerId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoffAt": {
+          "name": "cutoffAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "featureVersion": {
+          "name": "featureVersion",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "daysSinceLastPurchase": {
+          "name": "daysSinceLastPurchase",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "totalOrders": {
+          "name": "totalOrders",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purchaseFrequency": {
+          "name": "purchaseFrequency",
+          "type": "decimal(16,6)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "totalGrossValue": {
+          "name": "totalGrossValue",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "totalNetValue": {
+          "name": "totalNetValue",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "averageOrderValue": {
+          "name": "averageOrderValue",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "totalItems": {
+          "name": "totalItems",
+          "type": "decimal(18,3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "averageItemsPerOrder": {
+          "name": "averageItemsPerOrder",
+          "type": "decimal(18,6)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "uniqueProducts": {
+          "name": "uniqueProducts",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "activeMonths": {
+          "name": "activeMonths",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purchaseCount": {
+          "name": "purchaseCount",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "averageQuantityPerOrder": {
+          "name": "averageQuantityPerOrder",
+          "type": "decimal(18,6)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "averageDaysBetweenOrders": {
+          "name": "averageDaysBetweenOrders",
+          "type": "decimal(18,6)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "purchaseIntervalVariance": {
+          "name": "purchaseIntervalVariance",
+          "type": "decimal(20,6)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "firstPurchaseDate": {
+          "name": "firstPurchaseDate",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lastPurchaseDate": {
+          "name": "lastPurchaseDate",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "customerLifetimeDays": {
+          "name": "customerLifetimeDays",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "inactiveDays": {
+          "name": "inactiveDays",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "returnCount": {
+          "name": "returnCount",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "returnQuantity": {
+          "name": "returnQuantity",
+          "type": "decimal(18,3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "returnValue": {
+          "name": "returnValue",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "returnRate": {
+          "name": "returnRate",
+          "type": "decimal(16,6)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cancellationCount": {
+          "name": "cancellationCount",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cancellationRate": {
+          "name": "cancellationRate",
+          "type": "decimal(16,6)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "productDiversity": {
+          "name": "productDiversity",
+          "type": "decimal(16,6)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purchasesLast7d": {
+          "name": "purchasesLast7d",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purchasesLast30d": {
+          "name": "purchasesLast30d",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purchasesLast60d": {
+          "name": "purchasesLast60d",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purchasesLast90d": {
+          "name": "purchasesLast90d",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "spendLast30d": {
+          "name": "spendLast30d",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "spendLast60d": {
+          "name": "spendLast60d",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "spendLast90d": {
+          "name": "spendLast90d",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ordersLast30d": {
+          "name": "ordersLast30d",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ordersLast60d": {
+          "name": "ordersLast60d",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ordersLast90d": {
+          "name": "ordersLast90d",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recentVsPreviousOrderRate": {
+          "name": "recentVsPreviousOrderRate",
+          "type": "decimal(16,6)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recentVsPreviousSpend": {
+          "name": "recentVsPreviousSpend",
+          "type": "decimal(16,6)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recentVsPreviousQuantity": {
+          "name": "recentVsPreviousQuantity",
+          "type": "decimal(16,6)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "acquisitionMonth": {
+          "name": "acquisitionMonth",
+          "type": "varchar(7)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "acquisitionQuarter": {
+          "name": "acquisitionQuarter",
+          "type": "varchar(7)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cohortMonth": {
+          "name": "cohortMonth",
+          "type": "varchar(7)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "customerAgeAtCutoff": {
+          "name": "customerAgeAtCutoff",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "customer_feature_snapshot_unique": {
+          "name": "customer_feature_snapshot_unique",
+          "columns": [
+            "runId",
+            "customerId"
+          ],
+          "isUnique": true
+        },
+        "customer_feature_snapshot_customer_idx": {
+          "name": "customer_feature_snapshot_customer_idx",
+          "columns": [
+            "customerId",
+            "cutoffAt"
+          ],
+          "isUnique": false
+        },
+        "customer_feature_snapshot_run_idx": {
+          "name": "customer_feature_snapshot_run_idx",
+          "columns": [
+            "runId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "customer_feature_snapshots_runId_customer_feature_runs_id_fk": {
+          "name": "customer_feature_snapshots_runId_customer_feature_runs_id_fk",
+          "tableFrom": "customer_feature_snapshots",
+          "tableTo": "customer_feature_runs",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "customer_feature_snapshots_provenanceId_data_provenance_id_fk": {
+          "name": "customer_feature_snapshots_provenanceId_data_provenance_id_fk",
+          "tableFrom": "customer_feature_snapshots",
+          "tableTo": "data_provenance",
+          "columnsFrom": [
+            "provenanceId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "customer_feature_snapshots_customerId_customers_id_fk": {
+          "name": "customer_feature_snapshots_customerId_customers_id_fk",
+          "tableFrom": "customer_feature_snapshots",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customerId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "customer_feature_snapshots_id": {
+          "name": "customer_feature_snapshots_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "customer_retention_recommendations": {
+      "name": "customer_retention_recommendations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "runId": {
+          "name": "runId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "customerId": {
+          "name": "customerId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "snapshotId": {
+          "name": "snapshotId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "modelRunId": {
+          "name": "modelRunId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "explanationRunId": {
+          "name": "explanationRunId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "explanationId": {
+          "name": "explanationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "valueRunId": {
+          "name": "valueRunId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoffAt": {
+          "name": "cutoffAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "featureVersion": {
+          "name": "featureVersion",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "methodologyVersion": {
+          "name": "methodologyVersion",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "priorityScore": {
+          "name": "priorityScore",
+          "type": "decimal(12,6)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "priorityBand": {
+          "name": "priorityBand",
+          "type": "varchar(30)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recommendedAction": {
+          "name": "recommendedAction",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rationale": {
+          "name": "rationale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "supportingSignals": {
+          "name": "supportingSignals",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "interventionCost": {
+          "name": "interventionCost",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "expectedBenefit": {
+          "name": "expectedBenefit",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "benefitEvidence": {
+          "name": "benefitEvidence",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "customer_retention_recommendations_run_customer_unique": {
+          "name": "customer_retention_recommendations_run_customer_unique",
+          "columns": [
+            "runId",
+            "customerId"
+          ],
+          "isUnique": true
+        },
+        "customer_retention_recommendations_snapshot_idx": {
+          "name": "customer_retention_recommendations_snapshot_idx",
+          "columns": [
+            "snapshotId"
+          ],
+          "isUnique": false
+        },
+        "customer_retention_recommendations_priority_idx": {
+          "name": "customer_retention_recommendations_priority_idx",
+          "columns": [
+            "runId",
+            "priorityScore"
+          ],
+          "isUnique": false
+        },
+        "customer_retention_recommendations_model_idx": {
+          "name": "customer_retention_recommendations_model_idx",
+          "columns": [
+            "modelRunId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "customer_retention_recommendations_runId_retention_recommendation_runs_id_fk": {
+          "name": "customer_retention_recommendations_runId_retention_recommendation_runs_id_fk",
+          "tableFrom": "customer_retention_recommendations",
+          "tableTo": "retention_recommendation_runs",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "customer_retention_recommendations_customerId_customers_id_fk": {
+          "name": "customer_retention_recommendations_customerId_customers_id_fk",
+          "tableFrom": "customer_retention_recommendations",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customerId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "customer_retention_recommendations_snapshotId_customer_feature_snapshots_id_fk": {
+          "name": "customer_retention_recommendations_snapshotId_customer_feature_snapshots_id_fk",
+          "tableFrom": "customer_retention_recommendations",
+          "tableTo": "customer_feature_snapshots",
+          "columnsFrom": [
+            "snapshotId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "customer_retention_recommendations_modelRunId_churn_model_runs_id_fk": {
+          "name": "customer_retention_recommendations_modelRunId_churn_model_runs_id_fk",
+          "tableFrom": "customer_retention_recommendations",
+          "tableTo": "churn_model_runs",
+          "columnsFrom": [
+            "modelRunId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "customer_retention_recommendations_valueRunId_revenue_intelligence_runs_id_fk": {
+          "name": "customer_retention_recommendations_valueRunId_revenue_intelligence_runs_id_fk",
+          "tableFrom": "customer_retention_recommendations",
+          "tableTo": "revenue_intelligence_runs",
+          "columnsFrom": [
+            "valueRunId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "customer_retention_recommendations_id": {
+          "name": "customer_retention_recommendations_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "customer_value_snapshots": {
+      "name": "customer_value_snapshots",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "runId": {
+          "name": "runId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "snapshotId": {
+          "name": "snapshotId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "customerId": {
+          "name": "customerId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "modelRunId": {
+          "name": "modelRunId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoffAt": {
+          "name": "cutoffAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "featureVersion": {
+          "name": "featureVersion",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "methodologyVersion": {
+          "name": "methodologyVersion",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "horizonDays": {
+          "name": "horizonDays",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "historicalGrossRevenue": {
+          "name": "historicalGrossRevenue",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "historicalNetRevenue": {
+          "name": "historicalNetRevenue",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "returnValue": {
+          "name": "returnValue",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "orderCount": {
+          "name": "orderCount",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "averageOrderValue": {
+          "name": "averageOrderValue",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purchaseFrequency": {
+          "name": "purchaseFrequency",
+          "type": "decimal(16,6)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lifetimeActivityDays": {
+          "name": "lifetimeActivityDays",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "calibratedChurnProbability": {
+          "name": "calibratedChurnProbability",
+          "type": "decimal(12,8)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expectedFutureValue": {
+          "name": "expectedFutureValue",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "behavioralClv": {
+          "name": "behavioralClv",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "revenueAtRisk": {
+          "name": "revenueAtRisk",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "customer_value_snapshots_run_snapshot_unique": {
+          "name": "customer_value_snapshots_run_snapshot_unique",
+          "columns": [
+            "runId",
+            "snapshotId"
+          ],
+          "isUnique": true
+        },
+        "customer_value_snapshots_run_customer_unique": {
+          "name": "customer_value_snapshots_run_customer_unique",
+          "columns": [
+            "runId",
+            "customerId"
+          ],
+          "isUnique": true
+        },
+        "customer_value_snapshots_customer_cutoff_idx": {
+          "name": "customer_value_snapshots_customer_cutoff_idx",
+          "columns": [
+            "customerId",
+            "cutoffAt"
+          ],
+          "isUnique": false
+        },
+        "customer_value_snapshots_model_idx": {
+          "name": "customer_value_snapshots_model_idx",
+          "columns": [
+            "modelRunId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "customer_value_snapshots_runId_revenue_intelligence_runs_id_fk": {
+          "name": "customer_value_snapshots_runId_revenue_intelligence_runs_id_fk",
+          "tableFrom": "customer_value_snapshots",
+          "tableTo": "revenue_intelligence_runs",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "customer_value_snapshots_snapshotId_customer_feature_snapshots_id_fk": {
+          "name": "customer_value_snapshots_snapshotId_customer_feature_snapshots_id_fk",
+          "tableFrom": "customer_value_snapshots",
+          "tableTo": "customer_feature_snapshots",
+          "columnsFrom": [
+            "snapshotId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "customer_value_snapshots_customerId_customers_id_fk": {
+          "name": "customer_value_snapshots_customerId_customers_id_fk",
+          "tableFrom": "customer_value_snapshots",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customerId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "customer_value_snapshots_modelRunId_churn_model_runs_id_fk": {
+          "name": "customer_value_snapshots_modelRunId_churn_model_runs_id_fk",
+          "tableFrom": "customer_value_snapshots",
+          "tableTo": "churn_model_runs",
+          "columnsFrom": [
+            "modelRunId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "customer_value_snapshots_id": {
+          "name": "customer_value_snapshots_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "customers": {
+      "name": "customers",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "sourceCustomerId": {
+          "name": "sourceCustomerId",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "firstActivityAt": {
+          "name": "firstActivityAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lastActivityAt": {
+          "name": "lastActivityAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "country": {
+          "name": "country",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "provenanceId": {
+          "name": "provenanceId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "customers_source_customer_unique": {
+          "name": "customers_source_customer_unique",
+          "columns": [
+            "sourceCustomerId"
+          ],
+          "isUnique": true
+        },
+        "customers_last_activity_idx": {
+          "name": "customers_last_activity_idx",
+          "columns": [
+            "lastActivityAt"
+          ],
+          "isUnique": false
+        },
+        "customers_provenance_idx": {
+          "name": "customers_provenance_idx",
+          "columns": [
+            "provenanceId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "customers_provenanceId_data_provenance_id_fk": {
+          "name": "customers_provenanceId_data_provenance_id_fk",
+          "tableFrom": "customers",
+          "tableTo": "data_provenance",
+          "columnsFrom": [
+            "provenanceId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "customers_id": {
+          "name": "customers_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "data_provenance": {
+      "name": "data_provenance",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "datasetName": {
+          "name": "datasetName",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sourceUrl": {
+          "name": "sourceUrl",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sourceFile": {
+          "name": "sourceFile",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sourceSha256": {
+          "name": "sourceSha256",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "archiveSha256": {
+          "name": "archiveSha256",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "transformationVersion": {
+          "name": "transformationVersion",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "retrievedAt": {
+          "name": "retrievedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "data_provenance_source_sha256_unique": {
+          "name": "data_provenance_source_sha256_unique",
+          "columns": [
+            "sourceSha256"
+          ],
+          "isUnique": true
+        },
+        "data_provenance_dataset_idx": {
+          "name": "data_provenance_dataset_idx",
+          "columns": [
+            "datasetName"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "data_provenance_id": {
+          "name": "data_provenance_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "data_quality_issues": {
+      "name": "data_quality_issues",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "runId": {
+          "name": "runId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "issueType": {
+          "name": "issueType",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "severity": {
+          "name": "severity",
+          "type": "enum('INFO','WARNING','ERROR')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "entityName": {
+          "name": "entityName",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "entityKey": {
+          "name": "entityKey",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "data_quality_issues_run_idx": {
+          "name": "data_quality_issues_run_idx",
+          "columns": [
+            "runId"
+          ],
+          "isUnique": false
+        },
+        "data_quality_issues_type_idx": {
+          "name": "data_quality_issues_type_idx",
+          "columns": [
+            "issueType"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "data_quality_issues_runId_data_quality_runs_id_fk": {
+          "name": "data_quality_issues_runId_data_quality_runs_id_fk",
+          "tableFrom": "data_quality_issues",
+          "tableTo": "data_quality_runs",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "data_quality_issues_id": {
+          "name": "data_quality_issues_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "data_quality_runs": {
+      "name": "data_quality_runs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "provenanceId": {
+          "name": "provenanceId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "runKey": {
+          "name": "runKey",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('PASS','WARNING','FAIL')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rowsInspected": {
+          "name": "rowsInspected",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rowsAccepted": {
+          "name": "rowsAccepted",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rowsRejected": {
+          "name": "rowsRejected",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "qualitySummary": {
+          "name": "qualitySummary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "executedAt": {
+          "name": "executedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "data_quality_runs_run_key_unique": {
+          "name": "data_quality_runs_run_key_unique",
+          "columns": [
+            "runKey"
+          ],
+          "isUnique": true
+        },
+        "data_quality_runs_provenance_idx": {
+          "name": "data_quality_runs_provenance_idx",
+          "columns": [
+            "provenanceId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "data_quality_runs_provenanceId_data_provenance_id_fk": {
+          "name": "data_quality_runs_provenanceId_data_provenance_id_fk",
+          "tableFrom": "data_quality_runs",
+          "tableTo": "data_provenance",
+          "columnsFrom": [
+            "provenanceId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "data_quality_runs_id": {
+          "name": "data_quality_runs_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "invoice_items": {
+      "name": "invoice_items",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "sourceRowNumber": {
+          "name": "sourceRowNumber",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sourceRowHash": {
+          "name": "sourceRowHash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "orderId": {
+          "name": "orderId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "productId": {
+          "name": "productId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "decimal(14,3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "unitPrice": {
+          "name": "unitPrice",
+          "type": "decimal(14,4)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lineRevenue": {
+          "name": "lineRevenue",
+          "type": "decimal(16,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "isCancellation": {
+          "name": "isCancellation",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "provenanceId": {
+          "name": "provenanceId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ingestionRunId": {
+          "name": "ingestionRunId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "invoice_items_source_row_hash_unique": {
+          "name": "invoice_items_source_row_hash_unique",
+          "columns": [
+            "sourceRowHash"
+          ],
+          "isUnique": true
+        },
+        "invoice_items_order_idx": {
+          "name": "invoice_items_order_idx",
+          "columns": [
+            "orderId"
+          ],
+          "isUnique": false
+        },
+        "invoice_items_product_idx": {
+          "name": "invoice_items_product_idx",
+          "columns": [
+            "productId"
+          ],
+          "isUnique": false
+        },
+        "invoice_items_provenance_idx": {
+          "name": "invoice_items_provenance_idx",
+          "columns": [
+            "provenanceId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "invoice_items_orderId_orders_id_fk": {
+          "name": "invoice_items_orderId_orders_id_fk",
+          "tableFrom": "invoice_items",
+          "tableTo": "orders",
+          "columnsFrom": [
+            "orderId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "invoice_items_productId_products_id_fk": {
+          "name": "invoice_items_productId_products_id_fk",
+          "tableFrom": "invoice_items",
+          "tableTo": "products",
+          "columnsFrom": [
+            "productId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "invoice_items_provenanceId_data_provenance_id_fk": {
+          "name": "invoice_items_provenanceId_data_provenance_id_fk",
+          "tableFrom": "invoice_items",
+          "tableTo": "data_provenance",
+          "columnsFrom": [
+            "provenanceId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "invoice_items_ingestionRunId_data_quality_runs_id_fk": {
+          "name": "invoice_items_ingestionRunId_data_quality_runs_id_fk",
+          "tableFrom": "invoice_items",
+          "tableTo": "data_quality_runs",
+          "columnsFrom": [
+            "ingestionRunId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "invoice_items_id": {
+          "name": "invoice_items_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "orders": {
+      "name": "orders",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "sourceInvoiceId": {
+          "name": "sourceInvoiceId",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "customerId": {
+          "name": "customerId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "invoiceDate": {
+          "name": "invoiceDate",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "isCancellation": {
+          "name": "isCancellation",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "provenanceId": {
+          "name": "provenanceId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ingestionRunId": {
+          "name": "ingestionRunId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "orders_source_invoice_unique": {
+          "name": "orders_source_invoice_unique",
+          "columns": [
+            "sourceInvoiceId"
+          ],
+          "isUnique": true
+        },
+        "orders_customer_date_idx": {
+          "name": "orders_customer_date_idx",
+          "columns": [
+            "customerId",
+            "invoiceDate"
+          ],
+          "isUnique": false
+        },
+        "orders_provenance_idx": {
+          "name": "orders_provenance_idx",
+          "columns": [
+            "provenanceId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "orders_customerId_customers_id_fk": {
+          "name": "orders_customerId_customers_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customerId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "orders_provenanceId_data_provenance_id_fk": {
+          "name": "orders_provenanceId_data_provenance_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "data_provenance",
+          "columnsFrom": [
+            "provenanceId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "orders_ingestionRunId_data_quality_runs_id_fk": {
+          "name": "orders_ingestionRunId_data_quality_runs_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "data_quality_runs",
+          "columnsFrom": [
+            "ingestionRunId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "orders_id": {
+          "name": "orders_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "products": {
+      "name": "products",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "sourceStockCode": {
+          "name": "sourceStockCode",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "provenanceId": {
+          "name": "provenanceId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "products_source_stock_code_unique": {
+          "name": "products_source_stock_code_unique",
+          "columns": [
+            "sourceStockCode"
+          ],
+          "isUnique": true
+        },
+        "products_provenance_idx": {
+          "name": "products_provenance_idx",
+          "columns": [
+            "provenanceId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "products_provenanceId_data_provenance_id_fk": {
+          "name": "products_provenanceId_data_provenance_id_fk",
+          "tableFrom": "products",
+          "tableTo": "data_provenance",
+          "columnsFrom": [
+            "provenanceId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "products_id": {
+          "name": "products_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "retail_source_rows": {
+      "name": "retail_source_rows",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "sourceRowNumber": {
+          "name": "sourceRowNumber",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sourceRowHash": {
+          "name": "sourceRowHash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "invoiceNo": {
+          "name": "invoiceNo",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "stockCode": {
+          "name": "stockCode",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "decimal(14,3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "invoiceDate": {
+          "name": "invoiceDate",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "unitPrice": {
+          "name": "unitPrice",
+          "type": "decimal(14,4)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sourceCustomerId": {
+          "name": "sourceCustomerId",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "country": {
+          "name": "country",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "isCancellation": {
+          "name": "isCancellation",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "quantityValid": {
+          "name": "quantityValid",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "unitPriceValid": {
+          "name": "unitPriceValid",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "invoiceDateValid": {
+          "name": "invoiceDateValid",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "lineRevenue": {
+          "name": "lineRevenue",
+          "type": "decimal(16,2)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "provenanceId": {
+          "name": "provenanceId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ingestionRunId": {
+          "name": "ingestionRunId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "retail_source_rows_hash_unique": {
+          "name": "retail_source_rows_hash_unique",
+          "columns": [
+            "sourceRowHash"
+          ],
+          "isUnique": true
+        },
+        "retail_source_rows_invoice_idx": {
+          "name": "retail_source_rows_invoice_idx",
+          "columns": [
+            "invoiceNo"
+          ],
+          "isUnique": false
+        },
+        "retail_source_rows_customer_idx": {
+          "name": "retail_source_rows_customer_idx",
+          "columns": [
+            "sourceCustomerId"
+          ],
+          "isUnique": false
+        },
+        "retail_source_rows_provenance_idx": {
+          "name": "retail_source_rows_provenance_idx",
+          "columns": [
+            "provenanceId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "retail_source_rows_provenanceId_data_provenance_id_fk": {
+          "name": "retail_source_rows_provenanceId_data_provenance_id_fk",
+          "tableFrom": "retail_source_rows",
+          "tableTo": "data_provenance",
+          "columnsFrom": [
+            "provenanceId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "retail_source_rows_ingestionRunId_data_quality_runs_id_fk": {
+          "name": "retail_source_rows_ingestionRunId_data_quality_runs_id_fk",
+          "tableFrom": "retail_source_rows",
+          "tableTo": "data_quality_runs",
+          "columnsFrom": [
+            "ingestionRunId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "retail_source_rows_id": {
+          "name": "retail_source_rows_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "retention_recommendation_runs": {
+      "name": "retention_recommendation_runs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "runKey": {
+          "name": "runKey",
+          "type": "varchar(260)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provenanceId": {
+          "name": "provenanceId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "modelRunId": {
+          "name": "modelRunId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "explanationRunId": {
+          "name": "explanationRunId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "valueRunId": {
+          "name": "valueRunId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "featureVersion": {
+          "name": "featureVersion",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoffAt": {
+          "name": "cutoffAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "methodologyVersion": {
+          "name": "methodologyVersion",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rationaleVersion": {
+          "name": "rationaleVersion",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(40)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "retention_recommendation_runs_key_unique": {
+          "name": "retention_recommendation_runs_key_unique",
+          "columns": [
+            "runKey"
+          ],
+          "isUnique": true
+        },
+        "retention_recommendation_runs_provenance_idx": {
+          "name": "retention_recommendation_runs_provenance_idx",
+          "columns": [
+            "provenanceId"
+          ],
+          "isUnique": false
+        },
+        "retention_recommendation_runs_model_idx": {
+          "name": "retention_recommendation_runs_model_idx",
+          "columns": [
+            "modelRunId"
+          ],
+          "isUnique": false
+        },
+        "retention_recommendation_runs_value_idx": {
+          "name": "retention_recommendation_runs_value_idx",
+          "columns": [
+            "valueRunId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "retention_recommendation_runs_provenanceId_data_provenance_id_fk": {
+          "name": "retention_recommendation_runs_provenanceId_data_provenance_id_fk",
+          "tableFrom": "retention_recommendation_runs",
+          "tableTo": "data_provenance",
+          "columnsFrom": [
+            "provenanceId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "retention_recommendation_runs_modelRunId_churn_model_runs_id_fk": {
+          "name": "retention_recommendation_runs_modelRunId_churn_model_runs_id_fk",
+          "tableFrom": "retention_recommendation_runs",
+          "tableTo": "churn_model_runs",
+          "columnsFrom": [
+            "modelRunId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "retention_recommendation_runs_valueRunId_revenue_intelligence_runs_id_fk": {
+          "name": "retention_recommendation_runs_valueRunId_revenue_intelligence_runs_id_fk",
+          "tableFrom": "retention_recommendation_runs",
+          "tableTo": "revenue_intelligence_runs",
+          "columnsFrom": [
+            "valueRunId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "retention_recommendation_runs_id": {
+          "name": "retention_recommendation_runs_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "revenue_intelligence_runs": {
+      "name": "revenue_intelligence_runs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "runKey": {
+          "name": "runKey",
+          "type": "varchar(240)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provenanceId": {
+          "name": "provenanceId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "modelRunId": {
+          "name": "modelRunId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "featureVersion": {
+          "name": "featureVersion",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoffAt": {
+          "name": "cutoffAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "horizonDays": {
+          "name": "horizonDays",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "methodologyVersion": {
+          "name": "methodologyVersion",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "revenueSemantics": {
+          "name": "revenueSemantics",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(40)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "revenue_intelligence_runs_key_unique": {
+          "name": "revenue_intelligence_runs_key_unique",
+          "columns": [
+            "runKey"
+          ],
+          "isUnique": true
+        },
+        "revenue_intelligence_runs_provenance_idx": {
+          "name": "revenue_intelligence_runs_provenance_idx",
+          "columns": [
+            "provenanceId"
+          ],
+          "isUnique": false
+        },
+        "revenue_intelligence_runs_model_idx": {
+          "name": "revenue_intelligence_runs_model_idx",
+          "columns": [
+            "modelRunId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "revenue_intelligence_runs_provenanceId_data_provenance_id_fk": {
+          "name": "revenue_intelligence_runs_provenanceId_data_provenance_id_fk",
+          "tableFrom": "revenue_intelligence_runs",
+          "tableTo": "data_provenance",
+          "columnsFrom": [
+            "provenanceId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "revenue_intelligence_runs_modelRunId_churn_model_runs_id_fk": {
+          "name": "revenue_intelligence_runs_modelRunId_churn_model_runs_id_fk",
+          "tableFrom": "revenue_intelligence_runs",
+          "tableTo": "churn_model_runs",
+          "columnsFrom": [
+            "modelRunId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "revenue_intelligence_runs_id": {
+          "name": "revenue_intelligence_runs_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "users": {
+      "name": "users",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "openId": {
+          "name": "openId",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(320)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "loginMethod": {
+          "name": "loginMethod",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "role": {
+          "name": "role",
+          "type": "enum('user','admin')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'user'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        },
+        "lastSignedIn": {
+          "name": "lastSignedIn",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "users_id": {
+          "name": "users_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "users_openId_unique": {
+          "name": "users_openId_unique",
+          "columns": [
+            "openId"
+          ]
+        }
+      },
+      "checkConstraint": {}
+    }
+  },
+  "views": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "tables": {},
+    "indexes": {}
+  }
+}

@@ -1,0 +1,63 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #07110f;
+  --foreground: #f2f7f4;
+  --card: #0d1b18;
+  --card-foreground: #f2f7f4;
+  --popover: #10211d;
+  --popover-foreground: #f2f7f4;
+  --primary: #8ee6be;
+  --primary-foreground: #062018;
+  --secondary: #122923;
+  --secondary-foreground: #cde8dc;
+  --muted: #12211d;
+  --muted-foreground: #8ba69b;
+  --accent: #1a3730;
+  --accent-foreground: #dff8eb;
+  --destructive: #f17a7a;
+  --border: #203c34;
+  --input: #163028;
+  --ring: #8ee6be;
+  --radius: 0.85rem;
+}
+
+* { border-color: var(--border); }
+html { background: var(--background); }
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "ss01" 1;
+}
+button, a { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; }
+::selection { background: rgba(142, 230, 190, 0.22); color: var(--foreground); }
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .font-display { font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .motion-enter { animation: motion-enter 420ms cubic-bezier(.23,1,.32,1) both; }
+  .motion-delay-1 { animation-delay: 60ms; }
+  .motion-delay-2 { animation-delay: 120ms; }
+  .motion-delay-3 { animation-delay: 180ms; }
+  .motion-delay-4 { animation-delay: 240ms; }
+  @keyframes motion-enter {
+    from { opacity: 0; transform: translateY(7px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #081411; }
+::-webkit-scrollbar-thumb { background: #24493d; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #326254; }

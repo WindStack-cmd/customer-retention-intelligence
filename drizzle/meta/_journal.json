@@ -1,0 +1,62 @@
+{
+  "version": "8",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1789210451257,
+      "tag": "0000_pretty_leech",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1789311373968,
+      "tag": "0001_quick_monster_badoon",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1789542252222,
+      "tag": "0002_colorful_ozymandias",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1789627501996,
+      "tag": "0003_aromatic_frog_thor",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1791472938310,
+      "tag": "0004_spicy_lila_cheney",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1791548263857,
+      "tag": "0005_careless_the_hunter",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1791548263858,
+      "tag": "0006_monitoring",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1792830000000,
+      "tag": "0007_recovery_compatibility",
+      "breakpoints": true
+    }
+  ]
+}

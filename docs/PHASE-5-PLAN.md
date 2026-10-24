@@ -1,0 +1,12 @@
+# PHASE 5 — IMPLEMENTATION PLAN
+
+Phase 5 will add a reproducible behavioral inactivity modeling pipeline without changing the existing Phase 4 feature run or dashboard.
+
+1. **Temporal design.** Use the imported order range (`2010-12-01` through `2011-12-09`) to create eight versioned feature cutoffs: month-end cutoffs from `2011-04-30` through `2011-10-31`, plus the final usable cutoff `2011-11-09`. Each cutoff has a 30-day outcome horizon that is fully observable in the source. The existing Phase 4 run at `2011-11-09` remains unchanged and is reused.
+2. **Label dataset.** Add a separate idempotent label table joined to the immutable feature snapshots. Define behavioral inactivity as no order in `(cutoff, cutoff + 30 days]`. Split chronologically into train through August, validation in September–October, and test at the final November cutoff.
+3. **Modeling.** Export only verified feature snapshots and labels, exclude identifiers, timestamps, categorical cohort strings, and any future/outcome fields, then fit train-only preprocessing. Train class-balanced Logistic Regression and a resource-bounded Random Forest with deterministic seeds. Select the model using validation PR-AUC/Brier criteria, choose the operating threshold on validation only, and evaluate the untouched test split.
+4. **Calibration.** Fit a validation-only Platt sigmoid calibrator on raw validation probabilities and evaluate raw versus calibrated probabilities using Brier score and reliability bins. Persist the calibrated probability for downstream modeling records while clearly documenting the calibration limitation.
+5. **Persistence.** Add minimum model-run, metric, prediction, and label tables with deterministic unique keys. Store model/preprocessing artifacts and metadata under the ignored local `artifacts/phase5/` directory; persist checksummed metadata and predictions to the database.
+6. **Verification.** Add boundary, leakage, split, preprocessing, probability-range, idempotency, and reproducibility tests. Run the full Phase 0–4 regression suite plus TypeScript, ESLint, formatting, Drizzle validation, build, health, and application checks. Stop after Phase 5; do not start SHAP, CLV, recommendations, GenAI, or MLOps.
+
+A repeated customer may appear in multiple chronological snapshots. This is acceptable for prospective retention-risk evaluation because each row uses only its own historical cutoff; the temporal split prevents later observations from entering earlier training periods. The limitation will be disclosed in the model card.

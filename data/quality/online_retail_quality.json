@@ -1,0 +1,123 @@
+{
+  "source": {
+    "dataset": "UCI Online Retail (dataset 352)",
+    "source_url": "https://archive.ics.uci.edu/static/public/352/online+retail.zip",
+    "retrieved_at_utc": "2026-09-12T18:14:03.955673+00:00",
+    "local_source": "/tmp/tmpk9jmd5ad/Online Retail.xlsx",
+    "source_filename": "Online Retail.xlsx",
+    "sha256": "43465a06f2ccf7c8b5bd2892bc7defb52f97487934fe93b16ae4c3936424676d",
+    "archive_filename": "online-retail.zip",
+    "archive_sha256": "f5385cbb54bbebf7196389109c6b0621faab0c304e3702548165e71c84aede8b",
+    "format": "xlsx",
+    "published_currency": "GBP"
+  },
+  "counts": {
+    "rows_before_cleaning": 541909,
+    "rows_after_cleaning": 406829,
+    "customers_before_cleaning": 4372,
+    "customers_after_cleaning": 4372,
+    "columns": 8
+  },
+  "structural": {
+    "expected_columns": [
+      "InvoiceNo",
+      "StockCode",
+      "Description",
+      "Quantity",
+      "InvoiceDate",
+      "UnitPrice",
+      "CustomerID",
+      "Country"
+    ],
+    "observed_columns": [
+      "InvoiceNo",
+      "StockCode",
+      "Description",
+      "Quantity",
+      "InvoiceDate",
+      "UnitPrice",
+      "CustomerID",
+      "Country"
+    ],
+    "missing_required_columns": [],
+    "unexpected_columns": [],
+    "empty_source": false
+  },
+  "missing_values": {
+    "InvoiceNo": {
+      "count": 0,
+      "percentage": 0.0
+    },
+    "StockCode": {
+      "count": 0,
+      "percentage": 0.0
+    },
+    "Description": {
+      "count": 1454,
+      "percentage": 0.2683
+    },
+    "Quantity": {
+      "count": 0,
+      "percentage": 0.0
+    },
+    "InvoiceDate": {
+      "count": 0,
+      "percentage": 0.0
+    },
+    "UnitPrice": {
+      "count": 0,
+      "percentage": 0.0
+    },
+    "CustomerID": {
+      "count": 135080,
+      "percentage": 24.9267
+    },
+    "Country": {
+      "count": 0,
+      "percentage": 0.0
+    }
+  },
+  "duplicates": {
+    "exact_duplicate_rows": 5268,
+    "duplicate_invoice_ids": 516009,
+    "duplicate_customer_ids": 402457,
+    "note": "Duplicate invoice and customer identifiers are expected at line-item grain and are reported, not deleted."
+  },
+  "invalid_records": {
+    "missing_customer_id": 135080,
+    "invalid_numeric": 0,
+    "invalid_date": 0,
+    "future_dates": 0,
+    "rejected_from_customer_level_output": 135080
+  },
+  "numerical_business_rules": {
+    "negative_quantity_rows": 10624,
+    "negative_unit_price_rows": 2,
+    "zero_unit_price_rows": 2515,
+    "note": "Negative quantities commonly represent returns/cancellations in this source; negative prices are reported for review and are not silently deleted."
+  },
+  "date_range": {
+    "min": "2010-12-01 08:26:00",
+    "max": "2011-12-09 12:50:00"
+  },
+  "numeric_ranges": {
+    "quantity": {
+      "min": -80995.0,
+      "max": 80995.0
+    },
+    "unit_price": {
+      "min": -11062.06,
+      "max": 38970.0
+    }
+  },
+  "transformations": [
+    "Normalized expected columns and trimmed string values.",
+    "Parsed numeric Quantity and UnitPrice values.",
+    "Parsed InvoiceDate values and identified future dates.",
+    "Added invoice cancellation flag from InvoiceNo leading C.",
+    "Derived line_revenue_gbp as Quantity multiplied by UnitPrice.",
+    "Excluded rows missing CustomerID or with invalid numeric/date fields from processed customer-level output; retained them in staging and quality counts.",
+    "Retained cancellation and negative-quantity rows with flags; no silent deletion."
+  ],
+  "overall_quality_status": "WARNING"
+}
