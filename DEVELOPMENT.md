@@ -14,6 +14,11 @@ The repository does not contain a database, credentials, downloaded raw dataset,
 
 Copy `.env.example` to `.env` and fill it locally. The template contains names and placeholders only. Required application configuration is `DATABASE_URL`, OAuth settings, `VITE_APP_ID`, `JWT_SECRET`, and `OWNER_OPEN_ID`. The GenAI analyst additionally needs `BUILT_IN_FORGE_API_URL` and `BUILT_IN_FORGE_API_KEY`. Optional analytics and frontend Forge variables may remain empty.
 
+For a local database-backed demonstration without an external OAuth provider, set both
+`DEV_LOCAL_AUTH_ENABLED=true` and `VITE_DEV_LOCAL_AUTH_ENABLED=true`. This path is only
+accepted in development mode, creates a clearly labeled local development user, and is
+not available in production.
+
 ## Windows commands
 
 Use `pnpm dev`, not a Unix-style `NODE_ENV=development ...` command. The server defaults to development mode when `NODE_ENV` is absent. Use `$env:NODE_ENV = "production"` before `pnpm start`.

@@ -17,4 +17,7 @@ export const ENV = {
   demoMode: readBoolean(process.env.DEMO_MODE, true),
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  localAuthEnabled:
+    process.env.NODE_ENV === "development" &&
+    readBoolean(process.env.DEV_LOCAL_AUTH_ENABLED, false),
 };
