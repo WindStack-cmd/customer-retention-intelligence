@@ -17,6 +17,50 @@ const MAX_CONTEXT_CUSTOMERS = 20;
 const MAX_CONTEXT_RECOMMENDATIONS = 10;
 const MODEL = process.env.ANALYST_MODEL?.trim() || "gpt-5-mini";
 
+function providerConfigurationError(): TRPCError | undefined {
+  const missingKey = !ENV.forgeApiKey || ENV.forgeApiKey.includes("<");
+  const missingUrl = !ENV.forgeApiUrl || ENV.forgeApiUrl.includes("<");
+
+  if (missingUrl && missingKey) {
+    return new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "The grounded analyst provider is not configured. Set BUILT_IN_FORGE_API_URL to the provider base URL and BUILT_IN_FORGE_API_KEY to its server-side key in .env. No AI answer was generated.",
+    });
+  }
+
+  if (missingKey) {
+    return new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "The grounded analyst provider key is not configured. Set BUILT_IN_FORGE_API_KEY in .env. No AI answer was generated.",
+    });
+  }
+
+  if (missingUrl) {
+    return new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "The grounded analyst provider URL is not configured. Set BUILT_IN_FORGE_API_URL in .env. No AI answer was generated.",
+    });
+  }
+
+  try {
+    const url = new URL(ENV.forgeApiUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("unsupported protocol");
+    }
+  } catch {
+    return new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "The grounded analyst provider URL is invalid. Set BUILT_IN_FORGE_API_URL to an http(s) URL. No AI answer was generated.",
+    });
+  }
+
+  return undefined;
+}
+
 const supportedTerms = [
   "risk",
   "churn",
@@ -252,12 +296,9 @@ export async function answerAnalystQuestion(
   buildContext: typeof buildAnalystContext = buildAnalystContext
 ): Promise<AnalystAnswer> {
   const question = validateAnalystQuestion(input.question);
-  if (!ENV.forgeApiKey && invoke === invokeLLM) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message:
-        "The grounded analyst provider is not configured. No AI answer was generated.",
-    });
+  if (invoke === invokeLLM) {
+    const configurationError = providerConfigurationError();
+    if (configurationError) throw configurationError;
   }
 
   const context = await buildContext(question);
@@ -310,7 +351,11 @@ export async function answerAnalystQuestion(
     });
     generated = parseStructuredAnswer(response);
   } catch (error) {
-    console.error("[Grounded Analyst] provider failure", error);
+    console.error("[Grounded Analyst] provider failure", {
+      errorType: error instanceof Error ? error.name : typeof error,
+      providerUrlConfigured: Boolean(ENV.forgeApiUrl),
+      providerKeyConfigured: Boolean(ENV.forgeApiKey),
+    });
     throw new TRPCError({
       code: "SERVICE_UNAVAILABLE",
       message:
