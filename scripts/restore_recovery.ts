@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { createReadStream } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
