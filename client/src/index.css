@@ -3,30 +3,120 @@
 
 @custom-variant dark (&:is(.dark *));
 
-:root {
-  --background: #07110f;
-  --foreground: #f2f7f4;
-  --card: #0d1b18;
-  --card-foreground: #f2f7f4;
-  --popover: #10211d;
-  --popover-foreground: #f2f7f4;
-  --primary: #8ee6be;
-  --primary-foreground: #062018;
-  --secondary: #122923;
-  --secondary-foreground: #cde8dc;
-  --muted: #12211d;
-  --muted-foreground: #8ba69b;
-  --accent: #1a3730;
-  --accent-foreground: #dff8eb;
-  --destructive: #f17a7a;
-  --border: #203c34;
-  --input: #163028;
-  --ring: #8ee6be;
-  --radius: 0.85rem;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-text: var(--primary-text);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-hover: var(--surface-hover);
+
+  --color-status-urgent-text: var(--status-urgent-text);
+  --color-status-urgent-bg: var(--status-urgent-bg);
+  --color-status-urgent-border: var(--status-urgent-border);
+
+  --color-status-high-text: var(--status-high-text);
+  --color-status-high-bg: var(--status-high-bg);
+  --color-status-high-border: var(--status-high-border);
+
+  --color-status-medium-text: var(--status-medium-text);
+  --color-status-medium-bg: var(--status-medium-bg);
+  --color-status-medium-border: var(--status-medium-border);
+
+  --color-status-protective-text: var(--status-protective-text);
+  --color-status-protective-bg: var(--status-protective-bg);
+  --color-status-protective-border: var(--status-protective-border);
 }
 
-* { border-color: var(--border); }
-html { background: var(--background); }
+:root {
+  /* Charcoal & Sand Dominant Canvas */
+  --background: #1e1e1c;
+  --foreground: #d8cbb3;
+
+  /* Elevated Surfaces */
+  --card: #252523;
+  --card-foreground: #d8cbb3;
+  --popover: #181816;
+  --popover-foreground: #d8cbb3;
+  --surface: #252523;
+  --surface-2: #181816;
+  --surface-hover: #2e2e2b;
+
+  /* Borders & Dividers */
+  --border: rgba(216, 203, 179, 0.12);
+  --border-subtle: rgba(216, 203, 179, 0.07);
+  --input: #181816;
+
+  /* Typography Tints */
+  --muted: #252523;
+  --muted-foreground: rgba(216, 203, 179, 0.65);
+  --subtle-foreground: rgba(216, 203, 179, 0.45);
+
+  /* Electric Blue Accent (5-10% of UI) */
+  --primary: #2f6bff;
+  --primary-foreground: #ffffff;
+  --primary-hover: #265ae6;
+  --primary-text: #6c93ff;
+  --primary-text: #6C93FF;
+  --accent: #252523;
+  --accent-foreground: #d8cbb3;
+  --accent-soft: rgba(47, 107, 255, 0.15);
+  --ring: #2f6bff;
+
+  --secondary: #252523;
+  --secondary-foreground: #d8cbb3;
+  --destructive: #e57368;
+  --destructive-foreground: #ffffff;
+  --radius: 0.85rem;
+
+  /* Status Tokens (Urgent, High, Medium, Protective) */
+  --status-urgent-text: #e57368;
+  --status-urgent-bg: rgba(229, 115, 104, 0.12);
+  --status-urgent-border: rgba(229, 115, 104, 0.28);
+
+  --status-high-text: #dca34e;
+  --status-high-bg: rgba(220, 163, 78, 0.12);
+  --status-high-border: rgba(220, 163, 78, 0.28);
+
+  --status-medium-text: #d8cbb3;
+  --status-medium-bg: rgba(216, 203, 179, 0.1);
+  --status-medium-border: rgba(216, 203, 179, 0.2);
+
+  --status-protective-text: #2f6bff;
+  --status-protective-bg: rgba(47, 107, 255, 0.12);
+  --status-protective-border: rgba(47, 107, 255, 0.28);
+}
+
+* {
+  border-color: var(--border);
+}
+html {
+  background: var(--background);
+  scroll-behavior: smooth;
+  scroll-padding-top: 96px;
+}
 body {
   margin: 0;
   min-width: 320px;
@@ -35,29 +125,69 @@ body {
   font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   font-feature-settings: "ss01" 1;
 }
-button, a { -webkit-tap-highlight-color: transparent; }
-button { cursor: pointer; }
-::selection { background: rgba(142, 230, 190, 0.22); color: var(--foreground); }
-
-@layer utilities {
-  .text-balance { text-wrap: balance; }
-  .font-display { font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif; }
-  .tabular-nums { font-variant-numeric: tabular-nums; }
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  cursor: pointer;
+}
+::selection {
+  background: rgba(47, 107, 255, 0.28);
+  color: #ffffff;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .motion-enter { animation: motion-enter 420ms cubic-bezier(.23,1,.32,1) both; }
-  .motion-delay-1 { animation-delay: 60ms; }
-  .motion-delay-2 { animation-delay: 120ms; }
-  .motion-delay-3 { animation-delay: 180ms; }
-  .motion-delay-4 { animation-delay: 240ms; }
-  @keyframes motion-enter {
-    from { opacity: 0; transform: translateY(7px); }
-    to { opacity: 1; transform: translateY(0); }
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .font-display {
+    font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  }
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
 }
 
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: #081411; }
-::-webkit-scrollbar-thumb { background: #24493d; border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: #326254; }
+@media (prefers-reduced-motion: no-preference) {
+  .motion-enter {
+    animation: motion-enter 420ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  }
+  .motion-delay-1 {
+    animation-delay: 60ms;
+  }
+  .motion-delay-2 {
+    animation-delay: 120ms;
+  }
+  .motion-delay-3 {
+    animation-delay: 180ms;
+  }
+  .motion-delay-4 {
+    animation-delay: 240ms;
+  }
+  @keyframes motion-enter {
+    from {
+      opacity: 0;
+      transform: translateY(7px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #181816;
+}
+::-webkit-scrollbar-thumb {
+  background: #3a3a36;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4a4a45;
+}
