@@ -105,8 +105,12 @@ async function startServer() {
 
   server.listen(port, () => {
     logger.info("server.started", { port, environment: ENV.nodeEnv });
-    console.log(`\n  \x1b[32m➜\x1b[0m  \x1b[1mLocal:\x1b[0m   \x1b[36mhttp://localhost:${port}/\x1b[0m`);
-    console.log(`  \x1b[32m➜\x1b[0m  \x1b[1mHealth:\x1b[0m  \x1b[36mhttp://localhost:${port}/health\x1b[0m\n`);
+    console.log(
+      `\n  \x1b[32m➜\x1b[0m  \x1b[1mLocal:\x1b[0m   \x1b[36mhttp://localhost:${port}/\x1b[0m`
+    );
+    console.log(
+      `  \x1b[32m➜\x1b[0m  \x1b[1mHealth:\x1b[0m  \x1b[36mhttp://localhost:${port}/health\x1b[0m\n`
+    );
   });
 }
 
