@@ -39,6 +39,13 @@ async function startServer() {
     const startedAt = Date.now();
     res.setHeader("x-request-id", requestId);
     res.on("finish", () => {
+      // Filter out internal background debug telemetry so terminal stays clean
+      if (
+        req.path.startsWith("/__manus__") ||
+        (req.path === "/" && req.method === "POST")
+      ) {
+        return;
+      }
       logger.info("http.request", {
         request_id: requestId,
         method: req.method,
@@ -48,6 +55,10 @@ async function startServer() {
       });
     });
     next();
+  });
+  // Handle background telemetry cleanly without 404 or fallthrough
+  app.post(["/", "/__manus__/logs"], (_req, res) => {
+    res.status(200).json({ ok: true });
   });
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
@@ -87,10 +98,15 @@ async function startServer() {
       preferred_port: preferredPort,
       port,
     });
+    console.log(
+      `  \x1b[33m➜  Notice: Port ${preferredPort} is in use, falling back to port ${port}\x1b[0m`
+    );
   }
 
   server.listen(port, () => {
     logger.info("server.started", { port, environment: ENV.nodeEnv });
+    console.log(`\n  \x1b[32m➜\x1b[0m  \x1b[1mLocal:\x1b[0m   \x1b[36mhttp://localhost:${port}/\x1b[0m`);
+    console.log(`  \x1b[32m➜\x1b[0m  \x1b[1mHealth:\x1b[0m  \x1b[36mhttp://localhost:${port}/health\x1b[0m\n`);
   });
 }
 

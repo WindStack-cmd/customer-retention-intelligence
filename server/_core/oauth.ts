@@ -25,14 +25,20 @@ export function registerOAuthRoutes(app: Express) {
 
     try {
       const openId = "local-development-user";
-      await db.upsertUser({
-        openId,
-        name: "Local Development User",
-        email: "local-development@example.invalid",
-        loginMethod: "local-development",
-        role: "admin",
-        lastSignedIn: new Date(),
-      });
+      try {
+        await db.upsertUser({
+          openId,
+          name: "Local Development User",
+          email: "local-development@example.invalid",
+          loginMethod: "local-development",
+          role: "admin",
+          lastSignedIn: new Date(),
+        });
+      } catch (dbError) {
+        console.warn(
+          "[Auth] Database offline during dev-login, continuing with local session token"
+        );
+      }
       const sessionToken = await sdk.createSessionToken(openId, {
         name: "Local Development User",
         expiresInMs: ONE_YEAR_MS,
