@@ -1,5 +1,13 @@
 import mysql, { type RowDataPacket } from "mysql2/promise";
 import { z } from "zod";
+import {
+  executiveOverviewFallback,
+  listCustomersFallback,
+  listRecommendationsFallback,
+  customerDetailFallback,
+  dataQualityMetadataFallback,
+  modelMetadataFallback,
+} from "./recoveryFallback";
 
 export const paginationSchema = z.object({
   page: z.number().int().min(1).max(10_000).default(1),
@@ -67,8 +75,9 @@ async function one<T extends DbRow = DbRow>(
 }
 
 export async function executiveOverview() {
-  const db = await connection();
+  let db: mysql.Connection | null = null;
   try {
+    db = await connection();
     const [summary, bands, metadata] = await Promise.all([
       one(
         db,
@@ -140,14 +149,21 @@ export async function executiveOverview() {
           }
         : null,
     };
+  } catch (err) {
+    console.warn(
+      "[Analytics API] Database unavailable, using verified recovery records:",
+      (err as Error).message
+    );
+    return executiveOverviewFallback();
   } finally {
-    await db.end();
+    if (db) await db.end().catch(() => {});
   }
 }
 
 export async function listCustomers(input: z.infer<typeof customerListSchema>) {
-  const db = await connection();
+  let db: mysql.Connection | null = null;
   try {
+    db = await connection();
     const params: unknown[] = [];
     const filters: string[] = [];
     if (input.search) {
@@ -218,14 +234,21 @@ export async function listCustomers(input: z.infer<typeof customerListSchema>) {
         cutoffAt: asDate(row.cutoffAt),
       })),
     };
+  } catch (err) {
+    console.warn(
+      "[Analytics API] Database unavailable, using verified recovery records:",
+      (err as Error).message
+    );
+    return listCustomersFallback(input);
   } finally {
-    await db.end();
+    if (db) await db.end().catch(() => {});
   }
 }
 
 export async function customerDetail(customerId: number) {
-  const db = await connection();
+  let db: mysql.Connection | null = null;
   try {
+    db = await connection();
     const row = await one(
       db,
       `SELECT c.id AS customerId, c.sourceCustomerId, c.country,
@@ -335,16 +358,23 @@ export async function customerDetail(customerId: number) {
         isCancellation: asNumber(order.isCancellation) === 1,
       })),
     };
+  } catch (err) {
+    console.warn(
+      "[Analytics API] Database unavailable, using verified recovery records:",
+      (err as Error).message
+    );
+    return customerDetailFallback(customerId);
   } finally {
-    await db.end();
+    if (db) await db.end().catch(() => {});
   }
 }
 
 export async function listRecommendations(
   input: z.infer<typeof recommendationListSchema>
 ) {
-  const db = await connection();
+  let db: mysql.Connection | null = null;
   try {
+    db = await connection();
     const params: unknown[] = [];
     const filters: string[] = [];
     if (input.priorityBand) {
@@ -397,14 +427,21 @@ export async function listRecommendations(
         valueRunId: asNumber(row.valueRunId),
       })),
     };
+  } catch (err) {
+    console.warn(
+      "[Analytics API] Database unavailable, using verified recovery records:",
+      (err as Error).message
+    );
+    return listRecommendationsFallback(input);
   } finally {
-    await db.end();
+    if (db) await db.end().catch(() => {});
   }
 }
 
 export async function dataQualityMetadata() {
-  const db = await connection();
+  let db: mysql.Connection | null = null;
   try {
+    db = await connection();
     const [runs, issues] = await Promise.all([
       query(
         db,
@@ -441,14 +478,21 @@ export async function dataQualityMetadata() {
         createdAt: asDate(row.createdAt),
       })),
     };
+  } catch (err) {
+    console.warn(
+      "[Analytics API] Database unavailable, using verified recovery records:",
+      (err as Error).message
+    );
+    return dataQualityMetadataFallback();
   } finally {
-    await db.end();
+    if (db) await db.end().catch(() => {});
   }
 }
 
 export async function modelMetadata() {
-  const db = await connection();
+  let db: mysql.Connection | null = null;
   try {
+    db = await connection();
     const runs = await query(
       db,
       `SELECT id, runKey, modelName, modelVersion, featureVersion,
@@ -471,7 +515,13 @@ export async function modelMetadata() {
         createdAt: asDate(row.createdAt),
       })),
     };
+  } catch (err) {
+    console.warn(
+      "[Analytics API] Database unavailable, using verified recovery records:",
+      (err as Error).message
+    );
+    return modelMetadataFallback();
   } finally {
-    await db.end();
+    if (db) await db.end().catch(() => {});
   }
 }

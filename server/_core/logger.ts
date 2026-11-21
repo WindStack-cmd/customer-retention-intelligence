@@ -25,6 +25,25 @@ function sanitize(context: LogContext): LogContext {
 }
 
 function write(level: LogLevel, event: string, context: LogContext = {}) {
+  if (event === "http.request") {
+    const method = context.method ?? "";
+    const path = context.path ?? "";
+    const status = Number(context.status ?? 200);
+    const ms = context.duration_ms ?? 0;
+    const color =
+      status >= 500
+        ? "\x1b[31m"
+        : status >= 400
+          ? "\x1b[33m"
+          : status >= 300
+            ? "\x1b[36m"
+            : "\x1b[32m";
+    console.log(
+      `  \x1b[90m[HTTP]\x1b[0m ${method} ${path} ${color}${status}\x1b[0m \x1b[90m(${ms}ms)\x1b[0m`
+    );
+    return;
+  }
+
   const payload = {
     timestamp: new Date().toISOString(),
     level,
