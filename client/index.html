@@ -7,6 +7,49 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1"
     />
     <title>Pulseboard — Customer Retention Intelligence</title>
+    <script>
+      // Forward deprecated unload listeners to pagehide to prevent Chrome Permissions Policy violation
+      (function () {
+        var origAddEventListener = window.addEventListener;
+        window.addEventListener = function (type, listener, options) {
+          if (type === "unload") {
+            return origAddEventListener.call(this, "pagehide", listener, options);
+          }
+          return origAddEventListener.call(this, type, listener, options);
+        };
+        try {
+          Object.defineProperty(window, "onunload", {
+            get: function () {
+              return window.onpagehide;
+            },
+            set: function (fn) {
+              window.onpagehide = fn;
+            },
+            configurable: true,
+          });
+        } catch (_) {}
+      })();
+    </script>
+    <style>
+      html,
+      body {
+        background-color: #1e1e1c;
+        color: #d8cbb3;
+        margin: 0;
+        min-height: 100vh;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.4;
+          transform: scale(0.9);
+        }
+      }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -16,7 +59,34 @@
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div
+        style="
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background-color: #1e1e1c;
+          color: #d8cbb3;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 13px;
+        "
+      >
+        <div style="display: flex; align-items: center; gap: 10px">
+          <span
+            style="
+              display: inline-block;
+              width: 8px;
+              height: 8px;
+              border-radius: 50%;
+              background-color: #2f6bff;
+              animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            "
+          ></span>
+          <span style="letter-spacing: -0.01em">Loading Pulseboard…</span>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
