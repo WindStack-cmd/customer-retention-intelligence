@@ -74,7 +74,7 @@ async function one<T extends DbRow = DbRow>(
   return rows[0];
 }
 
-export async function executiveOverview() {
+export async function executiveOverview(tenantId: string = "ws_default") {
   let db: mysql.Connection | null = null;
   try {
     db = await connection();
@@ -154,13 +154,16 @@ export async function executiveOverview() {
       "[Analytics API] Database unavailable, using verified recovery records:",
       (err as Error).message
     );
-    return executiveOverviewFallback();
+    return executiveOverviewFallback(tenantId);
   } finally {
     if (db) await db.end().catch(() => {});
   }
 }
 
-export async function listCustomers(input: z.infer<typeof customerListSchema>) {
+export async function listCustomers(
+  input: z.infer<typeof customerListSchema>,
+  tenantId: string = "ws_default"
+) {
   let db: mysql.Connection | null = null;
   try {
     db = await connection();
@@ -239,13 +242,16 @@ export async function listCustomers(input: z.infer<typeof customerListSchema>) {
       "[Analytics API] Database unavailable, using verified recovery records:",
       (err as Error).message
     );
-    return listCustomersFallback(input);
+    return listCustomersFallback(input, tenantId);
   } finally {
     if (db) await db.end().catch(() => {});
   }
 }
 
-export async function customerDetail(customerId: number) {
+export async function customerDetail(
+  customerId: number,
+  tenantId: string = "ws_default"
+) {
   let db: mysql.Connection | null = null;
   try {
     db = await connection();
@@ -363,14 +369,15 @@ export async function customerDetail(customerId: number) {
       "[Analytics API] Database unavailable, using verified recovery records:",
       (err as Error).message
     );
-    return customerDetailFallback(customerId);
+    return customerDetailFallback(customerId, tenantId);
   } finally {
     if (db) await db.end().catch(() => {});
   }
 }
 
 export async function listRecommendations(
-  input: z.infer<typeof recommendationListSchema>
+  input: z.infer<typeof recommendationListSchema>,
+  tenantId: string = "ws_default"
 ) {
   let db: mysql.Connection | null = null;
   try {
@@ -432,7 +439,7 @@ export async function listRecommendations(
       "[Analytics API] Database unavailable, using verified recovery records:",
       (err as Error).message
     );
-    return listRecommendationsFallback(input);
+    return listRecommendationsFallback(input, tenantId);
   } finally {
     if (db) await db.end().catch(() => {});
   }

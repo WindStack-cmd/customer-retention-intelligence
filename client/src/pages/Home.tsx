@@ -4,6 +4,13 @@ import {
   AIChatBox,
   type Message as AnalystMessage,
 } from "@/components/AIChatBox";
+import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
+import { TeamManagement } from "@/components/TeamManagement";
+import { IntegrationsSection } from "@/components/IntegrationsSection";
+import { RetentionROISection } from "@/components/RetentionROISection";
+import { CohortHeatmap } from "@/components/CohortHeatmap";
+import { BillingAndSecuritySection } from "@/components/BillingAndSecuritySection";
+import { CustomerDrawerEnhancements } from "@/components/CustomerDrawerEnhancements";
 import { trpc } from "@/lib/trpc";
 import {
   Activity,
@@ -14,13 +21,17 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDot,
+  CreditCard,
   Database,
+  Grid,
   Menu,
   Search,
   ShieldCheck,
   Sparkles,
+  TrendingUp,
   UsersRound,
   X,
+  Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatCurrency, formatDate } from "./homeData";
@@ -92,6 +103,11 @@ const navItems = [
   { id: "overview", label: "Overview", icon: Activity },
   { id: "customers", label: "Customers", icon: UsersRound },
   { id: "recommendations", label: "Actions", icon: Sparkles },
+  { id: "roi", label: "Retention ROI", icon: TrendingUp },
+  { id: "cohorts", label: "Cohorts", icon: Grid },
+  { id: "integrations", label: "Integrations", icon: Zap },
+  { id: "team", label: "Team", icon: ShieldCheck },
+  { id: "billing", label: "Billing & Security", icon: CreditCard },
   { id: "metadata", label: "Data & model", icon: Database },
 ];
 
@@ -108,9 +124,7 @@ export default function Home() {
   const [activeNav, setActiveNav] = useState(() => {
     if (typeof window !== "undefined" && window.location.hash) {
       const hash = window.location.hash.replace("#", "");
-      if (
-        ["overview", "customers", "recommendations", "metadata"].includes(hash)
-      ) {
+      if (navItems.some(item => item.id === hash)) {
         return hash;
       }
     }
@@ -417,10 +431,10 @@ export default function Home() {
             </span>
           </span>
         </div>
-        <nav className="space-y-1 px-3 py-7" aria-label="Main navigation">
-          <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[.2em] text-subtle-foreground">
-            Workspace
-          </p>
+        <div className="px-3 pt-4">
+          <WorkspaceSwitcher />
+        </div>
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="Main navigation">
           {navItems.map(item => {
             const isActive = activeNav === item.id;
             return (
@@ -492,7 +506,7 @@ export default function Home() {
         {mobileNav && (
           <div className="absolute inset-x-0 top-[78px] z-20 border-b border-border bg-card p-4 shadow-2xl lg:hidden">
             <div className="mb-3 flex items-center justify-between text-xs font-semibold uppercase tracking-[.18em] text-subtle-foreground">
-              Workspace{" "}
+              <span>Workspace</span>
               <button
                 onClick={() => setMobileNav(false)}
                 aria-label="Close navigation"
@@ -501,7 +515,11 @@ export default function Home() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            {navItems.map(item => {
+            <div className="mb-3">
+              <WorkspaceSwitcher />
+            </div>
+            <div className="space-y-1 max-h-80 overflow-y-auto">
+              {navItems.map(item => {
               const isActive = activeNav === item.id;
               return (
                 <a
@@ -524,6 +542,7 @@ export default function Home() {
                 </a>
               );
             })}
+            </div>
           </div>
         )}
 
@@ -897,9 +916,34 @@ export default function Home() {
             </div>
           </section>
 
+          {/* Phase 3: Retention Outcome & ROI Tracking */}
+          <section id="roi" className="mt-8">
+            <RetentionROISection />
+          </section>
+
+          {/* Phase 4: Cohort Retention Analytics */}
+          <section id="cohorts" className="mt-8">
+            <CohortHeatmap />
+          </section>
+
+          {/* Phase 2: Ingestion & Connectors */}
+          <section id="integrations" className="mt-8">
+            <IntegrationsSection />
+          </section>
+
+          {/* Phase 1: Team & Access Control */}
+          <section id="team" className="mt-8">
+            <TeamManagement />
+          </section>
+
+          {/* Phase 4: Billing, Security, & Compliance */}
+          <section id="billing" className="mt-8">
+            <BillingAndSecuritySection />
+          </section>
+
           <section
             id="metadata"
-            className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-5 py-4 text-[11px] text-muted-foreground sm:px-6"
+            className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-5 py-4 text-[11px] text-muted-foreground sm:px-6"
           >
             <div className="flex items-center gap-2">
               <Database className="h-4 w-4 text-primary-text" />
@@ -1076,6 +1120,12 @@ export default function Home() {
                     </p>
                   </div>
                 </div>
+
+                <CustomerDrawerEnhancements
+                  customerId={selectedCustomer}
+                  sourceCustomerId={detail.data.customer.sourceCustomerId}
+                />
+
                 <div className="mt-6 border-t border-border pt-4 text-[10px] leading-5 text-subtle-foreground">
                   Feature cutoff {formatDate(detail.data.features.cutoffAt)} ·
                   Model run {detail.data.recommendation.modelRunId} ·
