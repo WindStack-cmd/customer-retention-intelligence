@@ -675,7 +675,18 @@ class TenantStorage {
     if (filters?.userId) {
       logs = logs.filter(l => l.userId === filters.userId);
     }
-    return logs.slice(-(filters?.limit ?? 100)).reverse();
+    return logs
+      .slice(-(filters?.limit ?? 100))
+      .map(l => ({
+        ...l,
+        details:
+          typeof l.details === "object" && l.details !== null
+            ? JSON.stringify(l.details)
+            : l.details
+              ? String(l.details)
+              : null,
+      }))
+      .reverse();
   }
 
   // Dynamic / Imported Tenant Customers

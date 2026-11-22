@@ -238,7 +238,11 @@ export function BillingAndSecuritySection() {
                   <td className="py-2.5 text-foreground">{log.userName || "System"}</td>
                   <td className="py-2.5 text-primary font-medium">{log.action}</td>
                   <td className="py-2.5 text-subtle-foreground">{log.resourceType}:{log.resourceId || "—"}</td>
-                  <td className="py-2.5 text-muted-foreground truncate max-w-xs">{log.details || "—"}</td>
+                  <td className="py-2.5 text-muted-foreground truncate max-w-xs">
+                    {typeof log.details === "object" && log.details !== null
+                      ? JSON.stringify(log.details)
+                      : String(log.details || "—")}
+                  </td>
                 </tr>
               ))}
             </tbody>
