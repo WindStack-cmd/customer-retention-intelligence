@@ -96,6 +96,7 @@ export const customers = mysqlTable(
   "customers",
   {
     id: int("id").autoincrement().primaryKey(),
+    tenantId: varchar("tenantId", { length: 64 }).default("ws_default").notNull(),
     sourceCustomerId: varchar("sourceCustomerId", { length: 64 }).notNull(),
     firstActivityAt: timestamp("firstActivityAt").notNull(),
     lastActivityAt: timestamp("lastActivityAt").notNull(),
@@ -697,6 +698,7 @@ export const customerRetentionRecommendations = mysqlTable(
   "customer_retention_recommendations",
   {
     id: int("id").autoincrement().primaryKey(),
+    tenantId: varchar("tenantId", { length: 64 }).default("ws_default").notNull(),
     runId: int("runId")
       .notNull()
       .references(() => retentionRecommendationRuns.id),
@@ -942,3 +944,304 @@ export const monitoringMetrics = mysqlTable(
 
 export type MonitoringRun = typeof monitoringRuns.$inferSelect;
 export type MonitoringMetric = typeof monitoringMetrics.$inferSelect;
+
+/** Multi-tenant Workspaces / Organizations */
+export const workspaces = mysqlTable(
+  "workspaces",
+  {
+    id: varchar("id", { length: 64 }).primaryKey(),
+    name: text("name").notNull(),
+    slug: varchar("slug", { length: 64 }).notNull(),
+    plan: mysqlEnum("plan", ["starter", "pro", "enterprise"])
+      .default("pro")
+      .notNull(),
+    stripeCustomerId: varchar("stripeCustomerId", { length: 120 }),
+    stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 120 }),
+    subscriptionStatus: varchar("subscriptionStatus", { length: 32 })
+      .default("active")
+      .notNull(),
+    customerLimit: int("customerLimit").default(10000).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    slugIndex: uniqueIndex("workspaces_slug_unique").on(table.slug),
+  })
+);
+
+export const workspaceMembers = mysqlTable(
+  "workspace_members",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 64 })
+      .notNull()
+      .references(() => workspaces.id),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id),
+    role: mysqlEnum("role", ["admin", "csm", "analyst", "viewer"])
+      .default("viewer")
+      .notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    userWorkspaceUnique: uniqueIndex("workspace_members_user_ws_unique").on(
+      table.workspaceId,
+      table.userId
+    ),
+    workspaceIndex: index("workspace_members_ws_idx").on(table.workspaceId),
+  })
+);
+
+export const workspaceInvites = mysqlTable(
+  "workspace_invites",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 64 })
+      .notNull()
+      .references(() => workspaces.id),
+    email: varchar("email", { length: 320 }).notNull(),
+    role: mysqlEnum("role", ["admin", "csm", "analyst", "viewer"])
+      .default("viewer")
+      .notNull(),
+    token: varchar("token", { length: 128 }).notNull(),
+    invitedBy: int("invitedBy")
+      .notNull()
+      .references(() => users.id),
+    status: mysqlEnum("status", ["pending", "accepted", "revoked"])
+      .default("pending")
+      .notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    tokenUnique: uniqueIndex("workspace_invites_token_unique").on(table.token),
+    workspaceIndex: index("workspace_invites_ws_idx").on(table.workspaceId),
+  })
+);
+
+export const workspaceApiKeys = mysqlTable(
+  "workspace_api_keys",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 64 })
+      .notNull()
+      .references(() => workspaces.id),
+    name: varchar("name", { length: 100 }).notNull(),
+    keyPrefix: varchar("keyPrefix", { length: 16 }).notNull(),
+    keyHash: varchar("keyHash", { length: 128 }).notNull(),
+    createdBy: int("createdBy")
+      .notNull()
+      .references(() => users.id),
+    revokedAt: timestamp("revokedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    keyHashUnique: uniqueIndex("workspace_api_keys_hash_unique").on(
+      table.keyHash
+    ),
+    workspaceIndex: index("workspace_api_keys_ws_idx").on(table.workspaceId),
+  })
+);
+
+export const workspaceEvents = mysqlTable(
+  "workspace_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 64 })
+      .notNull()
+      .references(() => workspaces.id),
+    eventType: varchar("eventType", { length: 80 }).notNull(),
+    customerId: varchar("customerId", { length: 64 }),
+    properties: text("properties"),
+    source: varchar("source", { length: 64 }).default("api").notNull(),
+    timestamp: timestamp("timestamp").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    wsTypeIndex: index("workspace_events_ws_type_idx").on(
+      table.workspaceId,
+      table.eventType
+    ),
+    wsCustomerIndex: index("workspace_events_ws_cust_idx").on(
+      table.workspaceId,
+      table.customerId
+    ),
+  })
+);
+
+export const scoringRuns = mysqlTable(
+  "scoring_runs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 64 })
+      .notNull()
+      .references(() => workspaces.id),
+    status: mysqlEnum("status", [
+      "pending",
+      "running",
+      "completed",
+      "failed",
+    ]).notNull(),
+    triggerType: mysqlEnum("triggerType", [
+      "scheduled",
+      "manual",
+      "sync",
+    ]).notNull(),
+    customersScored: int("customersScored").default(0).notNull(),
+    revenueAtRisk: decimal("revenueAtRisk", { precision: 16, scale: 2 })
+      .default("0.00")
+      .notNull(),
+    summary: text("summary"),
+    startedAt: timestamp("startedAt").defaultNow().notNull(),
+    completedAt: timestamp("completedAt"),
+    error: text("error"),
+  },
+  table => ({
+    wsStatusIndex: index("scoring_runs_ws_status_idx").on(
+      table.workspaceId,
+      table.status
+    ),
+  })
+);
+
+export const interventions = mysqlTable(
+  "interventions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 64 })
+      .notNull()
+      .references(() => workspaces.id),
+    customerId: int("customerId").notNull(),
+    sourceCustomerId: varchar("sourceCustomerId", { length: 64 }).notNull(),
+    playbookType: varchar("playbookType", { length: 80 }).notNull(),
+    templateName: varchar("templateName", { length: 120 }),
+    recipientEmail: varchar("recipientEmail", { length: 320 }),
+    incentiveCode: varchar("incentiveCode", { length: 64 }),
+    incentiveAmount: decimal("incentiveAmount", { precision: 10, scale: 2 }),
+    status: mysqlEnum("status", [
+      "sent",
+      "delivered",
+      "failed",
+      "simulated",
+    ]).notNull(),
+    performedBy: int("performedBy")
+      .notNull()
+      .references(() => users.id),
+    performedByName: varchar("performedByName", { length: 120 }),
+    outcome: mysqlEnum("outcome", ["retained", "churned", "pending"])
+      .default("pending")
+      .notNull(),
+    revenueSaved: decimal("revenueSaved", { precision: 14, scale: 2 })
+      .default("0.00")
+      .notNull(),
+    details: text("details"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    wsCustIndex: index("interventions_ws_cust_idx").on(
+      table.workspaceId,
+      table.customerId
+    ),
+  })
+);
+
+export const customerNotes = mysqlTable(
+  "customer_notes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 64 })
+      .notNull()
+      .references(() => workspaces.id),
+    customerId: int("customerId").notNull(),
+    authorId: int("authorId")
+      .notNull()
+      .references(() => users.id),
+    authorName: varchar("authorName", { length: 120 }).notNull(),
+    note: text("note").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    wsCustIndex: index("customer_notes_ws_cust_idx").on(
+      table.workspaceId,
+      table.customerId
+    ),
+  })
+);
+
+export const alertRules = mysqlTable(
+  "alert_rules",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 64 })
+      .notNull()
+      .references(() => workspaces.id),
+    name: varchar("name", { length: 120 }).notNull(),
+    channel: mysqlEnum("channel", ["slack", "webhook", "hubspot"]).notNull(),
+    webhookUrl: text("webhookUrl"),
+    thresholdBand: mysqlEnum("thresholdBand", ["Urgent", "High", "Any"])
+      .default("Urgent")
+      .notNull(),
+    minRiskProbability: decimal("minRiskProbability", {
+      precision: 5,
+      scale: 4,
+    })
+      .default("0.7000")
+      .notNull(),
+    minRevenueAtRisk: decimal("minRevenueAtRisk", { precision: 12, scale: 2 })
+      .default("1000.00")
+      .notNull(),
+    enabled: int("enabled").default(1).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    wsIndex: index("alert_rules_ws_idx").on(table.workspaceId),
+  })
+);
+
+export const auditLogs = mysqlTable(
+  "audit_logs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 64 })
+      .notNull()
+      .references(() => workspaces.id),
+    userId: int("userId"),
+    userName: varchar("userName", { length: 120 }),
+    action: varchar("action", { length: 80 }).notNull(),
+    resourceType: varchar("resourceType", { length: 64 }).notNull(),
+    resourceId: varchar("resourceId", { length: 120 }),
+    details: text("details"),
+    ipAddress: varchar("ipAddress", { length: 64 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    wsActionIndex: index("audit_logs_ws_action_idx").on(
+      table.workspaceId,
+      table.action
+    ),
+  })
+);
+
+export type Workspace = typeof workspaces.$inferSelect;
+export type InsertWorkspace = typeof workspaces.$inferInsert;
+export type WorkspaceMember = typeof workspaceMembers.$inferSelect;
+export type InsertWorkspaceMember = typeof workspaceMembers.$inferInsert;
+export type WorkspaceInvite = typeof workspaceInvites.$inferSelect;
+export type InsertWorkspaceInvite = typeof workspaceInvites.$inferInsert;
+export type WorkspaceApiKey = typeof workspaceApiKeys.$inferSelect;
+export type InsertWorkspaceApiKey = typeof workspaceApiKeys.$inferInsert;
+export type WorkspaceEvent = typeof workspaceEvents.$inferSelect;
+export type InsertWorkspaceEvent = typeof workspaceEvents.$inferInsert;
+export type ScoringRun = typeof scoringRuns.$inferSelect;
+export type InsertScoringRun = typeof scoringRuns.$inferInsert;
+export type Intervention = typeof interventions.$inferSelect;
+export type InsertIntervention = typeof interventions.$inferInsert;
+export type CustomerNote = typeof customerNotes.$inferSelect;
+export type InsertCustomerNote = typeof customerNotes.$inferInsert;
+export type AlertRule = typeof alertRules.$inferSelect;
+export type InsertAlertRule = typeof alertRules.$inferInsert;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = typeof auditLogs.$inferInsert;
+
