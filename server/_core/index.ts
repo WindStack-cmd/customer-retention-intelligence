@@ -11,6 +11,8 @@ import { serveStatic, setupVite } from "./vite";
 import { createRequestId, logger } from "./logger";
 import { ENV } from "./env";
 
+import { tenantStorage } from "../tenantStorage";
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
@@ -72,6 +74,78 @@ async function startServer() {
       databaseConfigured: Boolean(ENV.databaseUrl),
       timestamp: new Date().toISOString(),
     });
+  });
+
+  // Inbound Ingestion Events API with API key verification and rate limiting
+  const rateLimitMap = new Map<string, number[]>();
+  app.post("/api/v1/events", (req, res) => {
+    const rawApiKey = (
+      req.header("x-api-key") ||
+      req.header("authorization")?.replace(/^Bearer\s+/i, "")
+    )?.trim();
+    if (!rawApiKey) {
+      return res.status(401).json({ error: "Missing x-api-key header" });
+    }
+
+    const verifiedKey = tenantStorage.verifyApiKey(rawApiKey);
+    if (!verifiedKey) {
+      return res.status(401).json({ error: "Invalid or revoked API key" });
+    }
+
+    // Rate limiter: 100 requests per 60 seconds per key
+    const now = Date.now();
+    const timestamps = (rateLimitMap.get(verifiedKey.keyPrefix) || []).filter(
+      t => now - t < 60000
+    );
+    if (timestamps.length >= 100) {
+      return res
+        .status(429)
+        .json({ error: "Rate limit exceeded (100 req/minute)" });
+    }
+    timestamps.push(now);
+    rateLimitMap.set(verifiedKey.keyPrefix, timestamps);
+
+    const { eventType, customerId, properties, timestamp } = req.body || {};
+    if (!eventType || typeof eventType !== "string") {
+      return res
+        .status(400)
+        .json({ error: "Field 'eventType' is required and must be a string" });
+    }
+
+    const recorded = tenantStorage.recordEvent({
+      workspaceId: verifiedKey.workspaceId,
+      eventType,
+      customerId: customerId != null ? String(customerId) : null,
+      properties:
+        properties && typeof properties === "object" ? properties : null,
+      source: "inbound_api",
+      timestamp: timestamp ? new Date(timestamp) : new Date(),
+    });
+
+    return res.status(200).json({
+      success: true,
+      eventId: recorded.id,
+      workspaceId: verifiedKey.workspaceId,
+      timestamp: recorded.timestamp,
+    });
+  });
+
+  // Stripe Webhook endpoint
+  app.post("/api/webhooks/stripe", (req, res) => {
+    const event = req.body;
+    console.log(`[Stripe Webhook] Received event: ${event?.type || "unknown"}`);
+    if (
+      event?.type === "customer.subscription.updated" ||
+      event?.type === "checkout.session.completed"
+    ) {
+      const workspaceId = event.data?.object?.client_reference_id;
+      if (workspaceId) {
+        tenantStorage.updateWorkspace(workspaceId, {
+          subscriptionStatus: "active",
+        });
+      }
+    }
+    return res.status(200).json({ received: true });
   });
   registerStorageProxy(app);
   registerOAuthRoutes(app);
