@@ -404,4 +404,43 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
     const fetched = tenantStorage.getSsoConfig(testWsId);
     expect(fetched.entityId).toBe("https://identity.okta.com/app/pulseboard_saml");
   });
+
+  it("strictly disables unvalidated SAML assertions and returns 501 on ACS", async () => {
+    const express = (await import("express")).default;
+    const { registerOAuthRoutes } = await import("./_core/oauth");
+    const app = express();
+    app.use(express.json());
+    registerOAuthRoutes(app);
+
+    // Simulate ACS request without an approved XML signature validation library
+    const res = await new Promise<{ status: number; body: any }>((resolve) => {
+      const mockReq = {
+        headers: {},
+        body: { SAMLResponse: "unvalidated_raw_xml_payload" },
+      } as any;
+      const mockRes = {
+        statusCode: 200,
+        status(code: number) {
+          this.statusCode = code;
+          return this;
+        },
+        json(data: any) {
+          resolve({ status: this.statusCode, body: data });
+        },
+      } as any;
+
+      // Find the /api/auth/saml/acs route handler
+      const acsRoute = (app as any)._router?.stack?.find(
+        (layer: any) => layer.route?.path === "/api/auth/saml/acs"
+      );
+      if (acsRoute) {
+        acsRoute.route.stack[0].handle(mockReq, mockRes);
+      } else {
+        resolve({ status: 404, body: null });
+      }
+    });
+
+    expect(res.status).toBe(501);
+    expect(res.body.error).toBe("SSO login not enabled");
+  });
 });

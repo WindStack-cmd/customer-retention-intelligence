@@ -260,9 +260,20 @@ export function BillingAndSecuritySection() {
               Federated identity integration for Google Workspace, Microsoft Entra ID, and Okta.
             </p>
           </div>
-          <span className="self-start sm:self-auto rounded-full bg-accent-soft border border-border px-2.5 py-0.5 text-[10px] text-muted-foreground font-mono">
-            Mock Mode (Simulated Handshake)
+          <span className="self-start sm:self-auto rounded-full bg-status-medium-bg border border-status-medium-border px-2.5 py-0.5 text-[10px] text-status-medium-text font-mono font-medium">
+            Partial (Login Inactive - Validation Pending)
           </span>
+        </div>
+
+        {/* Informational banner: SAML login not active until library validation enabled */}
+        <div className="mb-4 rounded-xl border border-status-medium-border bg-status-medium-bg/30 p-3 text-xs text-status-medium-text flex items-start gap-2.5">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-status-medium-text" />
+          <div className="space-y-0.5">
+            <p className="font-semibold text-foreground">SAML login is not active until validation is enabled.</p>
+            <p className="text-[11px] text-muted-foreground">
+              SP metadata and IdP configuration are operational. The Assertion Consumer Service (ACS) strictly returns HTTP 501 to prevent insecure authentication until an approved XML signature validation library (e.g. <span className="font-mono text-foreground">@node-saml/node-saml</span>) is approved and installed.
+            </p>
+          </div>
         </div>
 
         {ssoMessage && (
