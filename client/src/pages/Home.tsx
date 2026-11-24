@@ -101,8 +101,8 @@ function LoadingState({ label }: { label: string }) {
 
 const navItems = [
   { id: "overview", label: "Overview", icon: Activity },
-  { id: "customers", label: "Customers", icon: UsersRound },
   { id: "recommendations", label: "Actions", icon: Sparkles },
+  { id: "customers", label: "Customers", icon: UsersRound },
   { id: "roi", label: "Retention ROI", icon: TrendingUp },
   { id: "cohorts", label: "Cohorts", icon: Grid },
   { id: "integrations", label: "Integrations", icon: Zap },
