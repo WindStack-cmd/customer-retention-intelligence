@@ -9,7 +9,7 @@ export type TrpcContext = {
   user: User | null;
   workspace: Workspace;
   membership: (WorkspaceMember & { userName?: string; userEmail?: string }) | null;
-  role: Role;
+  role: Role | null;
 };
 
 export async function createContext(
@@ -35,19 +35,30 @@ export async function createContext(
   }
 
   const userId = user ? user.id : 1;
-  const membership = tenantStorage.getMember(workspace.id, userId);
-  let role: Role = membership ? (membership.role as Role) : "viewer";
+  let membership = tenantStorage.getMember(workspace.id, userId);
 
-  // Local development user or admin user is always admin of ws_default
+  // Local development user or admin user is granted admin on default workspace
   if (
-    user?.role === "admin" ||
-    userId === 1 ||
-    user?.openId === "local-development-user"
+    !membership &&
+    workspace.id === "ws_default" &&
+    (userId === 1 ||
+      user?.openId === "local-development-user" ||
+      user?.role === "admin")
   ) {
-    if (workspace.id === "ws_default") {
-      role = "admin";
-    }
+    membership = {
+      id: 1,
+      workspaceId: "ws_default",
+      userId,
+      role: "admin",
+      userName: user?.name || "Local Development User",
+      userEmail: user?.email || "local-development@example.invalid",
+      createdAt: new Date("2026-10-01T00:00:00Z"),
+      updatedAt: new Date("2026-10-01T00:00:00Z"),
+    };
   }
+
+  // If user is not a member of the requested workspace, role is null (strictly no default viewer access!)
+  const role: Role | null = membership ? (membership.role as Role) : null;
 
   return {
     req: opts.req,
