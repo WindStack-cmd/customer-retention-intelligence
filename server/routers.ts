@@ -278,7 +278,20 @@ export const appRouter = router({
   analyst: router({
     ask: viewerProcedure
       .input(analystQuestionSchema)
-      .mutation(({ input }) => readOnly(() => answerAnalystQuestion(input))),
+      .mutation(async ({ ctx, input }) => {
+        const check = tenantStorage.incrementAnalystUsage(ctx.workspace.id);
+        if (!check.allowed) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: `Daily AI Analyst question limit reached (${check.limit}/day on the ${check.plan} plan). Please upgrade your workspace plan to ask more questions.`,
+          });
+        }
+        return readOnly(() => answerAnalystQuestion(input));
+      }),
+
+    quota: viewerProcedure.query(({ ctx }) => {
+      return tenantStorage.getAnalystDailyUsage(ctx.workspace.id);
+    }),
   }),
 
   // Phase 2: Ingestion, Connectors, & Scoring Runner
@@ -363,6 +376,16 @@ export const appRouter = router({
     triggerSync: adminProcedure
       .input(z.object({ source: z.enum(["stripe", "shopify"]) }))
       .mutation(async ({ ctx, input }) => {
+        const currentCount = tenantStorage.getTenantCustomerCount(
+          ctx.workspace.id
+        );
+        if (currentCount >= ctx.workspace.customerLimit) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: `Workspace reached its limit of ${ctx.workspace.customerLimit.toLocaleString()} customers on the ${ctx.workspace.plan} plan. Upgrade to sync more records.`,
+          });
+        }
+
         // Mock sync ingestion
         tenantStorage.recordEvent({
           workspaceId: ctx.workspace.id,

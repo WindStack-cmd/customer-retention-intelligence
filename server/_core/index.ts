@@ -105,6 +105,22 @@ async function startServer() {
     timestamps.push(now);
     rateLimitMap.set(verifiedKey.keyPrefix, timestamps);
 
+    // Enforce workspace customer limit based on subscription plan
+    const ws = tenantStorage.getWorkspace(verifiedKey.workspaceId);
+    const customerLimit = ws?.customerLimit ?? 10000;
+    const currentCustomerCount = tenantStorage.getTenantCustomerCount(
+      verifiedKey.workspaceId
+    );
+    if (currentCustomerCount >= customerLimit) {
+      return res.status(429).json({
+        error: "Plan limit exceeded",
+        message: `Workspace reached its limit of ${customerLimit.toLocaleString()} customers on the ${ws?.plan || "current"} plan. Upgrade your plan to ingest more customer records.`,
+        upgradeRequired: true,
+        currentCount: currentCustomerCount,
+        customerLimit,
+      });
+    }
+
     const { eventType, customerId, properties, timestamp } = req.body || {};
     if (!eventType || typeof eventType !== "string") {
       return res

@@ -39,7 +39,14 @@ interface TenantCacheData {
   alertRules: AlertRule[];
   auditLogs: AuditLog[];
   tenantCustomers: Record<string, any[]>;
+  analystDailyUsage?: Record<string, number>;
 }
+
+export const ANALYST_DAILY_LIMITS: Record<string, number> = {
+  starter: 20,
+  pro: 200,
+  enterprise: 999999,
+};
 
 function loadInitialData(): TenantCacheData {
   const defaultWs: Workspace = {
@@ -94,6 +101,7 @@ function loadInitialData(): TenantCacheData {
       }
       if (!parsed.alertRules) parsed.alertRules = defaultAlertRules;
       if (!parsed.tenantCustomers) parsed.tenantCustomers = {};
+      if (!parsed.analystDailyUsage) parsed.analystDailyUsage = {};
       return parsed;
     } catch {
       // Corrupt cache file, start fresh
@@ -112,6 +120,7 @@ function loadInitialData(): TenantCacheData {
     alertRules: defaultAlertRules,
     auditLogs: [],
     tenantCustomers: {},
+    analystDailyUsage: {},
   };
 }
 
@@ -697,6 +706,63 @@ class TenantStorage {
   setTenantCustomers(workspaceId: string, customers: any[]): void {
     this.data.tenantCustomers[workspaceId] = customers;
     this.save();
+  }
+
+  getTenantCustomerCount(workspaceId: string): number {
+    if (workspaceId === "ws_default") {
+      return 4122;
+    }
+    const customers = this.getTenantCustomers(workspaceId);
+    if (customers.length > 0) return customers.length;
+    const events = this.data.events.filter(
+      e => e.workspaceId === workspaceId && e.customerId
+    );
+    const uniqueIds = new Set(events.map(e => e.customerId));
+    return uniqueIds.size;
+  }
+
+  getAnalystDailyUsage(workspaceId: string): {
+    used: number;
+    limit: number;
+    remaining: number;
+    plan: string;
+  } {
+    const ws = this.getWorkspace(workspaceId);
+    const plan = ws?.plan || "pro";
+    const limit = ANALYST_DAILY_LIMITS[plan] ?? 200;
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `${workspaceId}:${today}`;
+    const used =
+      (this.data.analystDailyUsage && this.data.analystDailyUsage[key]) || 0;
+    return {
+      used,
+      limit,
+      remaining: Math.max(0, limit - used),
+      plan,
+    };
+  }
+
+  incrementAnalystUsage(workspaceId: string): {
+    allowed: boolean;
+    used: number;
+    limit: number;
+    plan: string;
+  } {
+    const ws = this.getWorkspace(workspaceId);
+    const plan = ws?.plan || "pro";
+    const limit = ANALYST_DAILY_LIMITS[plan] ?? 200;
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `${workspaceId}:${today}`;
+    if (!this.data.analystDailyUsage) {
+      this.data.analystDailyUsage = {};
+    }
+    const current = this.data.analystDailyUsage[key] || 0;
+    if (current >= limit) {
+      return { allowed: false, used: current, limit, plan };
+    }
+    this.data.analystDailyUsage[key] = current + 1;
+    this.save();
+    return { allowed: true, used: current + 1, limit, plan };
   }
 }
 

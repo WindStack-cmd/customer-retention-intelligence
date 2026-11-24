@@ -121,6 +121,7 @@ export default function Home() {
   );
   const [selectedCustomer, setSelectedCustomer] = useState<number | null>(null);
   const [mobileNav, setMobileNav] = useState(false);
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [activeNav, setActiveNav] = useState(() => {
     if (typeof window !== "undefined" && window.location.hash) {
       const hash = window.location.hash.replace("#", "");
@@ -346,8 +347,12 @@ export default function Home() {
     { enabled: enabled && selectedCustomer !== null, retry: false }
   );
 
+  const { data: analystQuota, refetch: refetchQuota } =
+    trpc.analyst.quota.useQuery(undefined, { enabled });
+
   const analyst = trpc.analyst.ask.useMutation({
     onSuccess: result => {
+      refetchQuota();
       setAnalystMessages(current => [
         ...current,
         {
@@ -366,6 +371,12 @@ export default function Home() {
             "The grounded analyst is temporarily unavailable. Executive KPIs and customer recommendations remain accessible.",
         },
       ]);
+      if (
+        error.message?.includes("limit reached") ||
+        error.data?.code === "TOO_MANY_REQUESTS"
+      ) {
+        setUpgradeModalOpen(true);
+      }
     },
   });
 
@@ -624,6 +635,11 @@ export default function Home() {
                   <span className="rounded-full border border-border bg-surface-2 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.13em] text-foreground">
                     Read only
                   </span>
+                  {analystQuota && (
+                    <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
+                      {analystQuota.remaining} of {analystQuota.limit} queries left today ({analystQuota.plan})
+                    </span>
+                  )}
                 </div>
                 <p className="mt-1 max-w-2xl text-xs leading-5 text-subtle-foreground">
                   Answers use approved production records and include scope,
@@ -1135,6 +1151,40 @@ export default function Home() {
               </>
             )}
           </aside>
+        </div>
+      )}
+
+      {upgradeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <div className="flex items-center gap-2 text-status-urgent-text">
+              <AlertTriangle className="h-5 w-5" />
+              <h3 className="font-display text-base font-semibold text-foreground">
+                Plan Limit Reached
+              </h3>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              You have reached the usage limit for your current workspace plan. Upgrade your plan to increase customer scoring capacity and AI analyst query quotas.
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setUpgradeModalOpen(false)}
+                className="rounded-lg border border-border px-3.5 py-1.5 text-xs text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+              >
+                Dismiss
+              </button>
+              <button
+                onClick={() => {
+                  setUpgradeModalOpen(false);
+                  const el = document.getElementById("billing");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary-hover"
+              >
+                Upgrade Plan
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

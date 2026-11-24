@@ -206,4 +206,34 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
       .reduce((sum, i) => sum + Number(i.revenueSaved), 0);
     expect(retainedTotal).toBe(1850.50);
   });
+
+  it("enforces plan limits for AI analyst queries and customer ingestion", () => {
+    const starterWs = tenantStorage.createWorkspace({
+      name: "Starter Limited WS",
+      userId: 777,
+      plan: "starter",
+    });
+    expect(starterWs.plan).toBe("starter");
+    expect(starterWs.customerLimit).toBe(1000);
+
+    // AI Analyst quota check: Starter allows 20 queries/day
+    const initialQuota = tenantStorage.getAnalystDailyUsage(starterWs.id);
+    expect(initialQuota.limit).toBe(20);
+    expect(initialQuota.plan).toBe("starter");
+
+    // Simulate exhausting quota
+    for (let i = 0; i < 20; i++) {
+      const res = tenantStorage.incrementAnalystUsage(starterWs.id);
+      expect(res.allowed).toBe(true);
+    }
+
+    // 21st query is rejected
+    const blocked = tenantStorage.incrementAnalystUsage(starterWs.id);
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.used).toBe(20);
+
+    // Customer count check
+    const count = tenantStorage.getTenantCustomerCount(starterWs.id);
+    expect(count).toBeLessThanOrEqual(starterWs.customerLimit);
+  });
 });
