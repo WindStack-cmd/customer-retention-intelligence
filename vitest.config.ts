@@ -14,6 +14,10 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    env: {
+      TENANT_CACHE_FILE: path.resolve(templateRoot, "data", "tenants_test_cache.json"),
+    },
+    setupFiles: ["server/testSetup.ts"],
     include: [
       "server/**/*.test.ts",
       "server/**/*.spec.ts",

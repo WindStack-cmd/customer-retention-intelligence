@@ -25,7 +25,9 @@ export interface MemberDetail extends WorkspaceMember {
   userEmail: string;
 }
 
-const CACHE_FILE = path.resolve(process.env.TENANT_CACHE_FILE ?? "data/tenants_cache.json");
+export function getCacheFilePath(): string {
+  return path.resolve(process.env.TENANT_CACHE_FILE ?? "data/tenants_cache.json");
+}
 
 export interface SsoConfig {
   provider: "google" | "microsoft" | "okta";
@@ -172,9 +174,10 @@ function loadInitialData(): TenantCacheData {
     },
   ];
 
-  if (fs.existsSync(CACHE_FILE)) {
+  const cacheFilePath = getCacheFilePath();
+  if (fs.existsSync(cacheFilePath)) {
     try {
-      const raw = fs.readFileSync(CACHE_FILE, "utf-8");
+      const raw = fs.readFileSync(cacheFilePath, "utf-8");
       const parsed = JSON.parse(raw);
       // Ensure default workspace and admin member always exist
       if (!parsed.workspaces?.some((w: Workspace) => w.id === "ws_default")) {
@@ -183,10 +186,26 @@ function loadInitialData(): TenantCacheData {
       if (!parsed.members?.some((m: WorkspaceMember) => m.workspaceId === "ws_default" && m.userId === 1)) {
         parsed.members = [defaultAdminMember, ...(parsed.members || [])];
       }
-      if (!parsed.alertRules) parsed.alertRules = defaultAlertRules;
+      // Idempotent alert rules: seed only if ws_default has none, and deduplicate identical names
+      if (!parsed.alertRules || parsed.alertRules.length === 0) {
+        parsed.alertRules = [...defaultAlertRules];
+      } else if (!parsed.alertRules.some((r: AlertRule) => r.workspaceId === "ws_default")) {
+        parsed.alertRules.push(defaultAlertRules[0]);
+      } else {
+        const seen = new Set<string>();
+        parsed.alertRules = parsed.alertRules.filter((r: AlertRule) => {
+          if (r.workspaceId === "ws_default") {
+            const key = `${r.workspaceId}:${r.name}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+          }
+          return true;
+        });
+      }
       if (!parsed.tenantCustomers) parsed.tenantCustomers = {};
       if (!parsed.analystDailyUsage) parsed.analystDailyUsage = {};
       if (!parsed.integrationsConfig) parsed.integrationsConfig = {};
+      if (!parsed.ssoConfig) parsed.ssoConfig = {};
       return parsed;
     } catch {
       // Corrupt cache file, start fresh
@@ -202,11 +221,12 @@ function loadInitialData(): TenantCacheData {
     scoringRuns: [],
     interventions: [],
     notes: [],
-    alertRules: defaultAlertRules,
+    alertRules: [...defaultAlertRules],
     auditLogs: [],
     tenantCustomers: {},
     analystDailyUsage: {},
     integrationsConfig: {},
+    ssoConfig: {},
   };
 }
 
@@ -236,8 +256,17 @@ class TenantStorage {
       }
       console.log(`[TenantStorage] Running in production mode with DATABASE_URL.`);
     } else {
-      console.log(`[TenantStorage] Storage initialized. Dev fallback cache active (${CACHE_FILE}).`);
+      console.log(`[TenantStorage] Storage initialized. Dev fallback cache active (${getCacheFilePath()}).`);
     }
+  }
+
+  public resetStore(freshData?: TenantCacheData) {
+    this.data = freshData ?? loadInitialData();
+    this.save();
+  }
+
+  public reloadFromDisk() {
+    this.data = loadInitialData();
   }
 
   private async persistToDb<T>(table: any, values: any) {
@@ -260,7 +289,7 @@ class TenantStorage {
   public async migrateCacheToDatabase(): Promise<{ success: boolean; importedCount: number }> {
     const db = await getDb();
     if (!db) {
-      console.log(`[TenantStorage] MySQL is offline. Running in local dev fallback mode (${CACHE_FILE}).`);
+      console.log(`[TenantStorage] MySQL is offline. Running in local dev fallback mode (${getCacheFilePath()}).`);
       return { success: false, importedCount: 0 };
     }
     let count = 0;
@@ -278,9 +307,10 @@ class TenantStorage {
 
   private save() {
     try {
-      const dir = path.dirname(CACHE_FILE);
+      const filePath = getCacheFilePath();
+      const dir = path.dirname(filePath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(CACHE_FILE, JSON.stringify(this.data, null, 2), "utf-8");
+      fs.writeFileSync(filePath, JSON.stringify(this.data, null, 2), "utf-8");
     } catch (err) {
       console.warn("[TenantStorage] Failed to persist cache:", err);
     }
@@ -977,11 +1007,16 @@ class TenantStorage {
     details?: any;
     ipAddress?: string | null;
   }): AuditLog {
+    const actorName =
+      log.userName ||
+      (log.userId ? this.getMember(log.workspaceId, log.userId)?.userName : null) ||
+      (log.userId === 1 ? "Local Development User" : "Workspace User");
+
     const item: AuditLog = {
       id: this.data.auditLogs.length + 1,
       workspaceId: log.workspaceId,
       userId: log.userId ?? null,
-      userName: log.userName ?? null,
+      userName: actorName,
       action: log.action,
       resourceType: log.resourceType,
       resourceId: log.resourceId ?? null,
@@ -998,7 +1033,7 @@ class TenantStorage {
     this.persistToDb(auditLogs, {
       workspaceId: log.workspaceId,
       userId: log.userId ?? null,
-      userName: log.userName ?? null,
+      userName: actorName,
       action: log.action,
       resourceType: log.resourceType,
       resourceId: log.resourceId ?? null,

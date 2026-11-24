@@ -48,6 +48,9 @@ pids
 *.pid.lock
 *.bak
 data/tenants_cache.json
+data/tenants_cache.backup.json
+data/tenants_cache.*.json
+data/tenants_test_cache*.json
 
 # Coverage directory used by tools like istanbul
 coverage/
