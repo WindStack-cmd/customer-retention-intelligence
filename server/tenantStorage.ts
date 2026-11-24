@@ -198,11 +198,34 @@ function loadInitialData(): TenantCacheData {
   };
 }
 
+import { getDb } from "./db";
+import { workspaces } from "../drizzle/schema";
+
 class TenantStorage {
   private data: TenantCacheData;
 
   constructor() {
     this.data = loadInitialData();
+    console.log(`[TenantStorage] Storage initialized. Dev fallback cache active (${CACHE_FILE}).`);
+  }
+
+  public async migrateCacheToDatabase(): Promise<{ success: boolean; importedCount: number }> {
+    const db = await getDb();
+    if (!db) {
+      console.log(`[TenantStorage] MySQL is offline. Running in local dev fallback mode (${CACHE_FILE}).`);
+      return { success: false, importedCount: 0 };
+    }
+    let count = 0;
+    try {
+      for (const ws of this.data.workspaces) {
+        await db.insert(workspaces).values(ws).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+        count++;
+      }
+      return { success: true, importedCount: count };
+    } catch (err) {
+      console.warn("[TenantStorage] Migration error:", err);
+      return { success: false, importedCount: count };
+    }
   }
 
   private save() {
