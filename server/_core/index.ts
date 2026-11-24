@@ -11,6 +11,10 @@ import { serveStatic, setupVite } from "./vite";
 import { createRequestId, logger } from "./logger";
 import { ENV } from "./env";
 
+import { tenantStorage } from "../tenantStorage";
+import { stripeWebhookMiddleware } from "../stripeWebhook";
+import { startScoringScheduler } from "../scoringScheduler";
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
@@ -73,6 +77,79 @@ async function startServer() {
       timestamp: new Date().toISOString(),
     });
   });
+
+  // Inbound Ingestion Events API with API key verification and rate limiting
+  const rateLimitMap = new Map<string, number[]>();
+  app.post("/api/v1/events", (req, res) => {
+    const rawApiKey = (
+      req.header("x-api-key") ||
+      req.header("authorization")?.replace(/^Bearer\s+/i, "")
+    )?.trim();
+    if (!rawApiKey) {
+      return res.status(401).json({ error: "Missing x-api-key header" });
+    }
+
+    const verifiedKey = tenantStorage.verifyApiKey(rawApiKey);
+    if (!verifiedKey) {
+      return res.status(401).json({ error: "Invalid or revoked API key" });
+    }
+
+    // Rate limiter: 100 requests per 60 seconds per key
+    const now = Date.now();
+    const timestamps = (rateLimitMap.get(verifiedKey.keyPrefix) || []).filter(
+      t => now - t < 60000
+    );
+    if (timestamps.length >= 100) {
+      return res
+        .status(429)
+        .json({ error: "Rate limit exceeded (100 req/minute)" });
+    }
+    timestamps.push(now);
+    rateLimitMap.set(verifiedKey.keyPrefix, timestamps);
+
+    // Enforce workspace customer limit based on subscription plan
+    const ws = tenantStorage.getWorkspace(verifiedKey.workspaceId);
+    const customerLimit = ws?.customerLimit ?? 10000;
+    const currentCustomerCount = tenantStorage.getTenantCustomerCount(
+      verifiedKey.workspaceId
+    );
+    if (currentCustomerCount >= customerLimit) {
+      return res.status(429).json({
+        error: "Plan limit exceeded",
+        message: `Workspace reached its limit of ${customerLimit.toLocaleString()} customers on the ${ws?.plan || "current"} plan. Upgrade your plan to ingest more customer records.`,
+        upgradeRequired: true,
+        currentCount: currentCustomerCount,
+        customerLimit,
+      });
+    }
+
+    const { eventType, customerId, properties, timestamp } = req.body || {};
+    if (!eventType || typeof eventType !== "string") {
+      return res
+        .status(400)
+        .json({ error: "Field 'eventType' is required and must be a string" });
+    }
+
+    const recorded = tenantStorage.recordEvent({
+      workspaceId: verifiedKey.workspaceId,
+      eventType,
+      customerId: customerId != null ? String(customerId) : null,
+      properties:
+        properties && typeof properties === "object" ? properties : null,
+      source: "inbound_api",
+      timestamp: timestamp ? new Date(timestamp) : new Date(),
+    });
+
+    return res.status(200).json({
+      success: true,
+      eventId: recorded.id,
+      workspaceId: verifiedKey.workspaceId,
+      timestamp: recorded.timestamp,
+    });
+  });
+
+  // Stripe Webhook endpoint with signature verification & mock fallback
+  app.post("/api/webhooks/stripe", stripeWebhookMiddleware);
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   // tRPC API
@@ -111,6 +188,7 @@ async function startServer() {
     console.log(
       `  \x1b[32m➜\x1b[0m  \x1b[1mHealth:\x1b[0m  \x1b[36mhttp://localhost:${port}/health\x1b[0m\n`
     );
+    startScoringScheduler();
   });
 }
 

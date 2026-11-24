@@ -74,7 +74,7 @@ async function one<T extends DbRow = DbRow>(
   return rows[0];
 }
 
-export async function executiveOverview() {
+export async function executiveOverview(tenantId: string = "ws_default") {
   let db: mysql.Connection | null = null;
   try {
     db = await connection();
@@ -90,7 +90,8 @@ export async function executiveOverview() {
         FROM customer_retention_recommendations r
         JOIN customer_value_snapshots v
           ON v.runId = r.valueRunId AND v.customerId = r.customerId AND v.snapshotId = r.snapshotId
-        WHERE r.runId = (SELECT id FROM retention_recommendation_runs WHERE status='completed' ORDER BY id DESC LIMIT 1)`
+        WHERE r.tenantId = ? AND r.runId = (SELECT id FROM retention_recommendation_runs WHERE tenantId = ? AND status='completed' ORDER BY id DESC LIMIT 1)`,
+        [tenantId, tenantId]
       ),
       query(
         db,
@@ -98,8 +99,9 @@ export async function executiveOverview() {
           AVG(priorityScore) AS averagePriorityScore,
           SUM(JSON_EXTRACT(supportingSignals, '$.revenueAtRisk')) AS revenueAtRisk
         FROM customer_retention_recommendations
-        WHERE runId = (SELECT id FROM retention_recommendation_runs WHERE status='completed' ORDER BY id DESC LIMIT 1)
-        GROUP BY priorityBand ORDER BY FIELD(priorityBand, 'Urgent', 'High', 'Monitor')`
+        WHERE tenantId = ? AND runId = (SELECT id FROM retention_recommendation_runs WHERE tenantId = ? AND status='completed' ORDER BY id DESC LIMIT 1)
+        GROUP BY priorityBand ORDER BY FIELD(priorityBand, 'Urgent', 'High', 'Monitor')`,
+        [tenantId, tenantId]
       ),
       one(
         db,
@@ -111,7 +113,8 @@ export async function executiveOverview() {
         FROM retention_recommendation_runs rr
         JOIN churn_model_runs m ON m.id = rr.modelRunId
         JOIN data_provenance p ON p.id = rr.provenanceId
-        WHERE rr.status='completed' ORDER BY rr.id DESC LIMIT 1`
+        WHERE rr.tenantId = ? AND rr.status='completed' ORDER BY rr.id DESC LIMIT 1`,
+        [tenantId]
       ),
     ]);
     return {
@@ -154,18 +157,21 @@ export async function executiveOverview() {
       "[Analytics API] Database unavailable, using verified recovery records:",
       (err as Error).message
     );
-    return executiveOverviewFallback();
+    return executiveOverviewFallback(tenantId);
   } finally {
     if (db) await db.end().catch(() => {});
   }
 }
 
-export async function listCustomers(input: z.infer<typeof customerListSchema>) {
+export async function listCustomers(
+  input: z.infer<typeof customerListSchema>,
+  tenantId: string = "ws_default"
+) {
   let db: mysql.Connection | null = null;
   try {
     db = await connection();
-    const params: unknown[] = [];
-    const filters: string[] = [];
+    const params: unknown[] = [tenantId, tenantId];
+    const filters: string[] = ["r.tenantId = ?", "c.tenantId = ?"];
     if (input.search) {
       filters.push("(c.sourceCustomerId LIKE ? OR c.country LIKE ?)");
       const search = `%${input.search}%`;
@@ -189,8 +195,8 @@ export async function listCustomers(input: z.infer<typeof customerListSchema>) {
     }
     const where = filters.length ? ` AND ${filters.join(" AND ")}` : "";
     const runIdSql =
-      "(SELECT id FROM retention_recommendation_runs WHERE status='completed' ORDER BY id DESC LIMIT 1)";
-    const countParams = [...params];
+      "(SELECT id FROM retention_recommendation_runs WHERE tenantId = ? AND status='completed' ORDER BY id DESC LIMIT 1)";
+    const countParams = [tenantId, ...params];
     const totalRow = await one(
       db,
       `SELECT COUNT(*) AS total FROM customer_retention_recommendations r
@@ -211,7 +217,7 @@ export async function listCustomers(input: z.infer<typeof customerListSchema>) {
        JOIN customer_value_snapshots v ON v.runId = r.valueRunId AND v.customerId = r.customerId AND v.snapshotId = r.snapshotId
        WHERE r.runId = ${runIdSql}${where}
        ORDER BY r.priorityScore DESC, r.customerId ASC LIMIT ? OFFSET ?`,
-      [...params, input.pageSize, offset]
+      [tenantId, ...params, input.pageSize, offset]
     );
     return {
       page: input.page,
@@ -239,13 +245,16 @@ export async function listCustomers(input: z.infer<typeof customerListSchema>) {
       "[Analytics API] Database unavailable, using verified recovery records:",
       (err as Error).message
     );
-    return listCustomersFallback(input);
+    return listCustomersFallback(input, tenantId);
   } finally {
     if (db) await db.end().catch(() => {});
   }
 }
 
-export async function customerDetail(customerId: number) {
+export async function customerDetail(
+  customerId: number,
+  tenantId: string = "ws_default"
+) {
   let db: mysql.Connection | null = null;
   try {
     db = await connection();
@@ -265,9 +274,9 @@ export async function customerDetail(customerId: number) {
        JOIN customer_feature_snapshots s ON s.id = r.snapshotId
        JOIN customer_value_snapshots v ON v.runId = r.valueRunId AND v.customerId = r.customerId AND v.snapshotId = r.snapshotId
        JOIN churn_predictions p ON p.modelRunId = r.modelRunId AND p.snapshotId = r.snapshotId
-       WHERE c.id = ? AND r.runId = (SELECT id FROM retention_recommendation_runs WHERE status='completed' ORDER BY id DESC LIMIT 1)
+       WHERE c.id = ? AND c.tenantId = ? AND r.tenantId = ? AND r.runId = (SELECT id FROM retention_recommendation_runs WHERE tenantId = ? AND status='completed' ORDER BY id DESC LIMIT 1)
        LIMIT 1`,
-      [customerId]
+      [customerId, tenantId, tenantId, tenantId]
     );
     if (!row) return null;
     const [features, orders] = await Promise.all([
@@ -363,20 +372,21 @@ export async function customerDetail(customerId: number) {
       "[Analytics API] Database unavailable, using verified recovery records:",
       (err as Error).message
     );
-    return customerDetailFallback(customerId);
+    return customerDetailFallback(customerId, tenantId);
   } finally {
     if (db) await db.end().catch(() => {});
   }
 }
 
 export async function listRecommendations(
-  input: z.infer<typeof recommendationListSchema>
+  input: z.infer<typeof recommendationListSchema>,
+  tenantId: string = "ws_default"
 ) {
   let db: mysql.Connection | null = null;
   try {
     db = await connection();
-    const params: unknown[] = [];
-    const filters: string[] = [];
+    const params: unknown[] = [tenantId];
+    const filters: string[] = ["r.tenantId = ?"];
     if (input.priorityBand) {
       filters.push("r.priorityBand = ?");
       params.push(input.priorityBand);
@@ -387,11 +397,11 @@ export async function listRecommendations(
     }
     const where = filters.length ? ` AND ${filters.join(" AND ")}` : "";
     const runIdSql =
-      "(SELECT id FROM retention_recommendation_runs WHERE status='completed' ORDER BY id DESC LIMIT 1)";
+      "(SELECT id FROM retention_recommendation_runs WHERE tenantId = ? AND status='completed' ORDER BY id DESC LIMIT 1)";
     const total = await one(
       db,
       `SELECT COUNT(*) AS total FROM customer_retention_recommendations r WHERE r.runId = ${runIdSql}${where}`,
-      params
+      [tenantId, ...params]
     );
     const offset = (input.page - 1) * input.pageSize;
     const rows = await query(
@@ -403,7 +413,7 @@ export async function listRecommendations(
       FROM customer_retention_recommendations r JOIN customers c ON c.id = r.customerId
       WHERE r.runId = ${runIdSql}${where}
       ORDER BY r.priorityScore DESC, r.customerId ASC LIMIT ? OFFSET ?`,
-      [...params, input.pageSize, offset]
+      [tenantId, ...params, input.pageSize, offset]
     );
     return {
       page: input.page,
@@ -432,7 +442,7 @@ export async function listRecommendations(
       "[Analytics API] Database unavailable, using verified recovery records:",
       (err as Error).message
     );
-    return listRecommendationsFallback(input);
+    return listRecommendationsFallback(input, tenantId);
   } finally {
     if (db) await db.end().catch(() => {});
   }

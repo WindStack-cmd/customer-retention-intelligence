@@ -4,6 +4,13 @@ import {
   AIChatBox,
   type Message as AnalystMessage,
 } from "@/components/AIChatBox";
+import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
+import { TeamManagement } from "@/components/TeamManagement";
+import { IntegrationsSection } from "@/components/IntegrationsSection";
+import { RetentionROISection } from "@/components/RetentionROISection";
+import { CohortHeatmap } from "@/components/CohortHeatmap";
+import { BillingAndSecuritySection } from "@/components/BillingAndSecuritySection";
+import { CustomerDrawerEnhancements } from "@/components/CustomerDrawerEnhancements";
 import { trpc } from "@/lib/trpc";
 import {
   Activity,
@@ -14,13 +21,17 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDot,
+  CreditCard,
   Database,
+  Grid,
   Menu,
   Search,
   ShieldCheck,
   Sparkles,
+  TrendingUp,
   UsersRound,
   X,
+  Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatCurrency, formatDate } from "./homeData";
@@ -90,8 +101,13 @@ function LoadingState({ label }: { label: string }) {
 
 const navItems = [
   { id: "overview", label: "Overview", icon: Activity },
-  { id: "customers", label: "Customers", icon: UsersRound },
   { id: "recommendations", label: "Actions", icon: Sparkles },
+  { id: "customers", label: "Customers", icon: UsersRound },
+  { id: "roi", label: "Retention ROI", icon: TrendingUp },
+  { id: "cohorts", label: "Cohorts", icon: Grid },
+  { id: "integrations", label: "Integrations", icon: Zap },
+  { id: "team", label: "Team", icon: ShieldCheck },
+  { id: "billing", label: "Billing & Security", icon: CreditCard },
   { id: "metadata", label: "Data & model", icon: Database },
 ];
 
@@ -105,12 +121,11 @@ export default function Home() {
   );
   const [selectedCustomer, setSelectedCustomer] = useState<number | null>(null);
   const [mobileNav, setMobileNav] = useState(false);
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [activeNav, setActiveNav] = useState(() => {
     if (typeof window !== "undefined" && window.location.hash) {
       const hash = window.location.hash.replace("#", "");
-      if (
-        ["overview", "customers", "recommendations", "metadata"].includes(hash)
-      ) {
+      if (navItems.some(item => item.id === hash)) {
         return hash;
       }
     }
@@ -332,8 +347,12 @@ export default function Home() {
     { enabled: enabled && selectedCustomer !== null, retry: false }
   );
 
+  const { data: analystQuota, refetch: refetchQuota } =
+    trpc.analyst.quota.useQuery(undefined, { enabled });
+
   const analyst = trpc.analyst.ask.useMutation({
     onSuccess: result => {
+      refetchQuota();
       setAnalystMessages(current => [
         ...current,
         {
@@ -352,6 +371,12 @@ export default function Home() {
             "The grounded analyst is temporarily unavailable. Executive KPIs and customer recommendations remain accessible.",
         },
       ]);
+      if (
+        error.message?.includes("limit reached") ||
+        error.data?.code === "TOO_MANY_REQUESTS"
+      ) {
+        setUpgradeModalOpen(true);
+      }
     },
   });
 
@@ -417,10 +442,10 @@ export default function Home() {
             </span>
           </span>
         </div>
-        <nav className="space-y-1 px-3 py-7" aria-label="Main navigation">
-          <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[.2em] text-subtle-foreground">
-            Workspace
-          </p>
+        <div className="px-3 pt-4">
+          <WorkspaceSwitcher />
+        </div>
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="Main navigation">
           {navItems.map(item => {
             const isActive = activeNav === item.id;
             return (
@@ -492,7 +517,7 @@ export default function Home() {
         {mobileNav && (
           <div className="absolute inset-x-0 top-[78px] z-20 border-b border-border bg-card p-4 shadow-2xl lg:hidden">
             <div className="mb-3 flex items-center justify-between text-xs font-semibold uppercase tracking-[.18em] text-subtle-foreground">
-              Workspace{" "}
+              <span>Workspace</span>
               <button
                 onClick={() => setMobileNav(false)}
                 aria-label="Close navigation"
@@ -501,7 +526,11 @@ export default function Home() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            {navItems.map(item => {
+            <div className="mb-3">
+              <WorkspaceSwitcher />
+            </div>
+            <div className="space-y-1 max-h-80 overflow-y-auto">
+              {navItems.map(item => {
               const isActive = activeNav === item.id;
               return (
                 <a
@@ -524,6 +553,7 @@ export default function Home() {
                 </a>
               );
             })}
+            </div>
           </div>
         )}
 
@@ -605,6 +635,11 @@ export default function Home() {
                   <span className="rounded-full border border-border bg-surface-2 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.13em] text-foreground">
                     Read only
                   </span>
+                  {analystQuota && (
+                    <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
+                      {analystQuota.remaining} of {analystQuota.limit} queries left today ({analystQuota.plan})
+                    </span>
+                  )}
                 </div>
                 <p className="mt-1 max-w-2xl text-xs leading-5 text-subtle-foreground">
                   Answers use approved production records and include scope,
@@ -897,9 +932,34 @@ export default function Home() {
             </div>
           </section>
 
+          {/* Phase 3: Retention Outcome & ROI Tracking */}
+          <section id="roi" className="mt-8">
+            <RetentionROISection />
+          </section>
+
+          {/* Phase 4: Cohort Retention Analytics */}
+          <section id="cohorts" className="mt-8">
+            <CohortHeatmap />
+          </section>
+
+          {/* Phase 2: Ingestion & Connectors */}
+          <section id="integrations" className="mt-8">
+            <IntegrationsSection />
+          </section>
+
+          {/* Phase 1: Team & Access Control */}
+          <section id="team" className="mt-8">
+            <TeamManagement />
+          </section>
+
+          {/* Phase 4: Billing, Security, & Compliance */}
+          <section id="billing" className="mt-8">
+            <BillingAndSecuritySection />
+          </section>
+
           <section
             id="metadata"
-            className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-5 py-4 text-[11px] text-muted-foreground sm:px-6"
+            className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-5 py-4 text-[11px] text-muted-foreground sm:px-6"
           >
             <div className="flex items-center gap-2">
               <Database className="h-4 w-4 text-primary-text" />
@@ -1076,6 +1136,12 @@ export default function Home() {
                     </p>
                   </div>
                 </div>
+
+                <CustomerDrawerEnhancements
+                  customerId={selectedCustomer}
+                  sourceCustomerId={detail.data.customer.sourceCustomerId}
+                />
+
                 <div className="mt-6 border-t border-border pt-4 text-[10px] leading-5 text-subtle-foreground">
                   Feature cutoff {formatDate(detail.data.features.cutoffAt)} ·
                   Model run {detail.data.recommendation.modelRunId} ·
@@ -1085,6 +1151,40 @@ export default function Home() {
               </>
             )}
           </aside>
+        </div>
+      )}
+
+      {upgradeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <div className="flex items-center gap-2 text-status-urgent-text">
+              <AlertTriangle className="h-5 w-5" />
+              <h3 className="font-display text-base font-semibold text-foreground">
+                Plan Limit Reached
+              </h3>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              You have reached the usage limit for your current workspace plan. Upgrade your plan to increase customer scoring capacity and AI analyst query quotas.
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setUpgradeModalOpen(false)}
+                className="rounded-lg border border-border px-3.5 py-1.5 text-xs text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+              >
+                Dismiss
+              </button>
+              <button
+                onClick={() => {
+                  setUpgradeModalOpen(false);
+                  const el = document.getElementById("billing");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary-hover"
+              >
+                Upgrade Plan
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

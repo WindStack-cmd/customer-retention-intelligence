@@ -5,6 +5,7 @@ import type {
   customerListSchema,
   recommendationListSchema,
 } from "./analyticsApi";
+import { tenantStorage } from "./tenantStorage";
 
 const RECOVERY_DIR = path.resolve(process.env.RECOVERY_DIR ?? "data/recovery");
 
@@ -134,8 +135,17 @@ function getCachedData() {
   return _cache;
 }
 
-export function executiveOverviewFallback() {
-  const { joined } = getCachedData();
+export function getRowsForTenant(
+  tenantId: string = "ws_default"
+): JoinedCustomerRow[] {
+  if (!tenantId || tenantId === "ws_default") {
+    return getCachedData().joined;
+  }
+  return tenantStorage.getTenantCustomers(tenantId);
+}
+
+export function executiveOverviewFallback(tenantId: string = "ws_default") {
+  const joined = getRowsForTenant(tenantId);
   const total = joined.length;
 
   let totalPriorityScore = 0;
@@ -214,9 +224,10 @@ export function executiveOverviewFallback() {
 }
 
 export function listCustomersFallback(
-  input: z.infer<typeof customerListSchema>
+  input: z.infer<typeof customerListSchema>,
+  tenantId: string = "ws_default"
 ) {
-  const { joined } = getCachedData();
+  const joined = getRowsForTenant(tenantId);
 
   let filtered = joined;
   if (input.search) {
@@ -272,9 +283,10 @@ export function listCustomersFallback(
 }
 
 export function listRecommendationsFallback(
-  input: z.infer<typeof recommendationListSchema>
+  input: z.infer<typeof recommendationListSchema>,
+  tenantId: string = "ws_default"
 ) {
-  const { joined } = getCachedData();
+  const joined = getRowsForTenant(tenantId);
 
   let filtered = joined;
   if (input.priorityBand) {
@@ -306,8 +318,12 @@ export function listRecommendationsFallback(
   };
 }
 
-export function customerDetailFallback(customerId: number) {
-  const { joined, values } = getCachedData();
+export function customerDetailFallback(
+  customerId: number,
+  tenantId: string = "ws_default"
+) {
+  const { values } = getCachedData();
+  const joined = getRowsForTenant(tenantId);
   const found = joined.find(r => r.customerId === customerId);
   if (!found) return null;
 
