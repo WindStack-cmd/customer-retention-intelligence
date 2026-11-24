@@ -11,19 +11,23 @@ if (!fs.existsSync(tempDir)) {
 const testCachePath = path.resolve(tempDir, `test_cache_${process.pid}.json`);
 process.env.TENANT_CACHE_FILE = testCachePath;
 
-import { tenantStorage } from "./tenantStorage";
+let tenantStorage: typeof import("./tenantStorage").tenantStorage;
 
-beforeAll(() => {
+beforeAll(async () => {
   process.env.TENANT_CACHE_FILE = testCachePath;
   if (fs.existsSync(testCachePath)) {
     try {
       fs.unlinkSync(testCachePath);
     } catch {}
   }
+  ({ tenantStorage } = await import("./tenantStorage"));
   tenantStorage.reloadFromDisk();
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  if (!tenantStorage) {
+    ({ tenantStorage } = await import("./tenantStorage"));
+  }
   // Ensure test runs against an isolated store in temp file
   tenantStorage.resetStore();
 });

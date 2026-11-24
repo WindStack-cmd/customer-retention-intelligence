@@ -7,12 +7,13 @@ import { tenantStorage, getCacheFilePath } from "./tenantStorage";
 describe("Test Cache Isolation Guard", () => {
   it("never modifies data/tenants_cache.json during test execution", () => {
     const devCachePath = path.resolve("data/tenants_cache.json");
-    expect(fs.existsSync(devCachePath)).toBe(true);
-
-    const hashBefore = crypto
-      .createHash("sha256")
-      .update(fs.readFileSync(devCachePath))
-      .digest("hex");
+    const devCacheExistedBefore = fs.existsSync(devCachePath);
+    const hashBefore = devCacheExistedBefore
+      ? crypto
+          .createHash("sha256")
+          .update(fs.readFileSync(devCachePath))
+          .digest("hex")
+      : null;
 
     // Verify current test environment uses an isolated temporary cache file
     const activeTestCache = getCacheFilePath();
@@ -45,11 +46,13 @@ describe("Test Cache Isolation Guard", () => {
     });
 
     // Check that dev cache on disk remains 100% byte-for-byte identical
-    const hashAfter = crypto
-      .createHash("sha256")
-      .update(fs.readFileSync(devCachePath))
-      .digest("hex");
-
-    expect(hashAfter).toBe(hashBefore);
+    expect(fs.existsSync(devCachePath)).toBe(devCacheExistedBefore);
+    if (hashBefore) {
+      const hashAfter = crypto
+        .createHash("sha256")
+        .update(fs.readFileSync(devCachePath))
+        .digest("hex");
+      expect(hashAfter).toBe(hashBefore);
+    }
   });
 });
