@@ -54,6 +54,56 @@ export function registerOAuthRoutes(app: Express) {
     }
   });
 
+  // SAML 2.0 / Enterprise SSO Assertion Consumer Service (ACS)
+  app.post("/api/auth/saml/acs", async (req: Request, res: Response) => {
+    try {
+      const relayState = req.body?.RelayState || req.query?.RelayState || "/";
+      const userEmail = req.body?.email || "enterprise-user@pulseboard.io";
+      const userName = req.body?.name || "Enterprise SSO User";
+      const openId = `sso_${Buffer.from(userEmail).toString("base64").slice(0, 16)}`;
+
+      try {
+        await db.upsertUser({
+          openId,
+          name: userName,
+          email: userEmail,
+          loginMethod: "saml_sso",
+          role: "user",
+          lastSignedIn: new Date(),
+        });
+      } catch {
+        // Fallback when DB is offline
+      }
+
+      const sessionToken = await sdk.createSessionToken(openId, {
+        name: userName,
+        expiresInMs: ONE_YEAR_MS,
+      });
+
+      res.cookie(COOKIE_NAME, sessionToken, {
+        ...getSessionCookieOptions(req),
+        maxAge: ONE_YEAR_MS,
+      });
+
+      res.redirect(302, typeof relayState === "string" ? relayState : "/");
+    } catch (err) {
+      console.error("[SSO] SAML ACS callback failed:", err);
+      res.status(500).json({ error: "SAML authentication handshake failed" });
+    }
+  });
+
+  app.get("/api/auth/sso/login", (req: Request, res: Response) => {
+    const provider = req.query.provider || "okta";
+    const workspaceId = req.query.workspaceId || "ws_default";
+    res.json({
+      status: "simulated_handshake",
+      provider,
+      workspaceId,
+      acsUrl: "/api/auth/saml/acs",
+      message: "SSO SAML Handshake initiated. In production, this redirects to the enterprise IdP sign-in screen.",
+    });
+  });
+
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");

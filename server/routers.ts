@@ -842,6 +842,45 @@ export const appRouter = router({
   }),
 
   security: router({
+    ssoConfig: adminProcedure.query(({ ctx }) => {
+      return tenantStorage.getSsoConfig(ctx.workspace.id);
+    }),
+
+    updateSsoConfig: adminProcedure
+      .input(
+        z.object({
+          provider: z.enum(["google", "microsoft", "okta"]),
+          entityId: z.string().min(1),
+          ssoUrl: z.string().url(),
+          certificateFingerprint: z.string().optional(),
+          enforceSso: z.boolean(),
+          domains: z.array(z.string()),
+        })
+      )
+      .mutation(({ ctx, input }) => {
+        const updated = tenantStorage.saveSsoConfig(ctx.workspace.id, input);
+        tenantStorage.logAudit({
+          workspaceId: ctx.workspace.id,
+          userId: ctx.user?.id,
+          userName: ctx.user?.name || "Admin",
+          action: "security.sso_configured",
+          resourceType: "sso_config",
+          resourceId: input.provider,
+          details: { provider: input.provider, enforceSso: input.enforceSso, domains: input.domains },
+        });
+        return updated;
+      }),
+
+    samlMetadata: adminProcedure.query(({ ctx }) => {
+      const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
+      return {
+        acsUrl: `${baseUrl}/api/auth/saml/acs`,
+        entityId: `${baseUrl}/saml/metadata/${ctx.workspace.id}`,
+        binding: "HTTP-POST",
+        nameIdFormat: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+      };
+    }),
+
     auditLogs: adminProcedure
       .input(
         z

@@ -27,6 +27,17 @@ export interface MemberDetail extends WorkspaceMember {
 
 const CACHE_FILE = path.resolve(process.env.TENANT_CACHE_FILE ?? "data/tenants_cache.json");
 
+export interface SsoConfig {
+  provider: "google" | "microsoft" | "okta";
+  entityId: string;
+  ssoUrl: string;
+  certificateFingerprint?: string;
+  enforceSso: boolean;
+  domains: string[];
+  status: "unconfigured" | "configured" | "simulated";
+  updatedAt?: string;
+}
+
 export interface PlaybookTemplate {
   id: string;
   name: string;
@@ -65,6 +76,7 @@ interface TenantCacheData {
     >
   >;
   playbookTemplates?: Record<string, PlaybookTemplate[]>;
+  ssoConfig?: Record<string, SsoConfig>;
 }
 
 export const ANALYST_DAILY_LIMITS: Record<string, number> = {
@@ -818,6 +830,38 @@ class TenantStorage {
     rule.enabled = rule.enabled === 1 ? 0 : 1;
     this.save();
     return rule;
+  }
+
+  // SSO / SAML Configuration
+  getSsoConfig(workspaceId: string): SsoConfig {
+    if (!this.data.ssoConfig) this.data.ssoConfig = {};
+    if (!this.data.ssoConfig[workspaceId]) {
+      this.data.ssoConfig[workspaceId] = {
+        provider: "okta",
+        entityId: "https://identity.okta.com/app/pulseboard_saml",
+        ssoUrl: "https://identity.okta.com/app/pulseboard_saml/sso/saml",
+        certificateFingerprint: "SHA-256: 3D:7A:B4:89:12:F0:45:9E:21:8B:D4:56:88:AC:E0:12",
+        enforceSso: false,
+        domains: ["pulseboard.io"],
+        status: "simulated",
+        updatedAt: new Date().toISOString(),
+      };
+    }
+    return this.data.ssoConfig[workspaceId];
+  }
+
+  saveSsoConfig(workspaceId: string, config: Partial<SsoConfig>): SsoConfig {
+    if (!this.data.ssoConfig) this.data.ssoConfig = {};
+    const existing = this.getSsoConfig(workspaceId);
+    const updated: SsoConfig = {
+      ...existing,
+      ...config,
+      status: "simulated",
+      updatedAt: new Date().toISOString(),
+    };
+    this.data.ssoConfig[workspaceId] = updated;
+    this.save();
+    return updated;
   }
 
   // Audit Logs

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   CreditCard,
@@ -8,6 +8,10 @@ import {
   Trash2,
   AlertTriangle,
   Sparkles,
+  KeyRound,
+  Copy,
+  ExternalLink,
+  Lock,
 } from "lucide-react";
 
 export function BillingAndSecuritySection() {
@@ -15,10 +19,41 @@ export function BillingAndSecuritySection() {
   const { data: subscription } = trpc.billing.subscription.useQuery();
   const { data: plans } = trpc.billing.plans.useQuery();
   const { data: auditLogs } = trpc.security.auditLogs.useQuery({ limit: 25 });
+  const { data: ssoConfig } = trpc.security.ssoConfig.useQuery();
+  const { data: samlMetadata } = trpc.security.samlMetadata.useQuery();
 
   const [gdprCustomerId, setGdprCustomerId] = useState("");
   const [gdprMessage, setGdprMessage] = useState<string | null>(null);
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
+
+  // SSO / SAML State
+  const [ssoProvider, setSsoProvider] = useState<"google" | "microsoft" | "okta">("okta");
+  const [ssoEntityId, setSsoEntityId] = useState("");
+  const [ssoUrl, setSsoUrl] = useState("");
+  const [ssoCert, setSsoCert] = useState("");
+  const [enforceSso, setEnforceSso] = useState(false);
+  const [ssoDomain, setSsoDomain] = useState("pulseboard.io");
+  const [ssoMessage, setSsoMessage] = useState<string | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (ssoConfig) {
+      setSsoProvider(ssoConfig.provider);
+      setSsoEntityId(ssoConfig.entityId);
+      setSsoUrl(ssoConfig.ssoUrl);
+      setSsoCert(ssoConfig.certificateFingerprint || "");
+      setEnforceSso(ssoConfig.enforceSso);
+      setSsoDomain(ssoConfig.domains.join(", "));
+    }
+  }, [ssoConfig]);
+
+  const updateSsoMutation = trpc.security.updateSsoConfig.useMutation({
+    onSuccess: () => {
+      utils.security.ssoConfig.invalidate();
+      setSsoMessage("SSO & SAML configuration updated (Mock Mode / Simulated Handshake).");
+      setTimeout(() => setSsoMessage(null), 4000);
+    },
+  });
 
   const checkoutMutation = trpc.billing.createCheckout.useMutation({
     onSuccess: (res) => {
@@ -211,6 +246,190 @@ export function BillingAndSecuritySection() {
         {gdprMessage && (
           <p className="mt-3 text-xs text-primary font-medium">{gdprMessage}</p>
         )}
+      </div>
+
+      {/* Enterprise Single Sign-On (SSO / SAML) */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-2xl">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-primary" />
+              <span>Enterprise Single Sign-On (SSO / SAML 2.0)</span>
+            </h4>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Federated identity integration for Google Workspace, Microsoft Entra ID, and Okta.
+            </p>
+          </div>
+          <span className="self-start sm:self-auto rounded-full bg-accent-soft border border-border px-2.5 py-0.5 text-[10px] text-muted-foreground font-mono">
+            Mock Mode (Simulated Handshake)
+          </span>
+        </div>
+
+        {ssoMessage && (
+          <div className="mb-4 rounded-xl border border-primary/30 bg-primary/10 p-3 text-xs text-primary flex items-center gap-2">
+            <Check className="h-4 w-4 shrink-0" />
+            <span>{ssoMessage}</span>
+          </div>
+        )}
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const domains = ssoDomain
+              .split(",")
+              .map((d) => d.trim())
+              .filter(Boolean);
+            updateSsoMutation.mutate({
+              provider: ssoProvider,
+              entityId: ssoEntityId,
+              ssoUrl: ssoUrl,
+              certificateFingerprint: ssoCert || undefined,
+              enforceSso,
+              domains: domains.length ? domains : ["pulseboard.io"],
+            });
+          }}
+          className="space-y-4 text-xs"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-medium text-foreground mb-1">
+                Identity Provider (IdP)
+              </label>
+              <select
+                value={ssoProvider}
+                onChange={(e) =>
+                  setSsoProvider(e.target.value as "google" | "microsoft" | "okta")
+                }
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-foreground focus:border-primary focus:outline-none"
+              >
+                <option value="okta">Okta Workforce Identity</option>
+                <option value="microsoft">Microsoft Entra ID (Azure AD)</option>
+                <option value="google">Google Workspace SAML</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-medium text-foreground mb-1">
+                IdP Entity ID / Issuer URI
+              </label>
+              <input
+                type="text"
+                required
+                value={ssoEntityId}
+                onChange={(e) => setSsoEntityId(e.target.value)}
+                placeholder="https://identity.okta.com/app/pulseboard"
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-foreground focus:border-primary focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-medium text-foreground mb-1">
+                IdP Single Sign-On (SSO) URL
+              </label>
+              <input
+                type="url"
+                required
+                value={ssoUrl}
+                onChange={(e) => setSsoUrl(e.target.value)}
+                placeholder="https://identity.okta.com/app/pulseboard/sso/saml"
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-foreground focus:border-primary focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block font-medium text-foreground mb-1">
+                Allowed Email Domains
+              </label>
+              <input
+                type="text"
+                value={ssoDomain}
+                onChange={(e) => setSsoDomain(e.target.value)}
+                placeholder="pulseboard.io, enterprise.com"
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-foreground focus:border-primary focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-medium text-foreground mb-1">
+              X.509 Certificate SHA-256 Fingerprint
+            </label>
+            <input
+              type="text"
+              value={ssoCert}
+              onChange={(e) => setSsoCert(e.target.value)}
+              placeholder="SHA-256: 3D:7A:B4:89:12:F0:45:9E:21:8B:D4:56:88:AC:E0:12"
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 font-mono text-[11px] text-foreground focus:border-primary focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="enforceSso"
+              checked={enforceSso}
+              onChange={(e) => setEnforceSso(e.target.checked)}
+              className="rounded border-border bg-background text-primary focus:ring-0"
+            />
+            <label htmlFor="enforceSso" className="text-foreground">
+              Enforce SSO authentication for all users with matching email domains
+            </label>
+          </div>
+
+          {/* Service Provider (Pulseboard) SAML Metadata Box */}
+          <div className="rounded-xl border border-border/80 bg-background/60 p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-foreground text-[11px] uppercase tracking-wider">
+                Pulseboard Service Provider (SP) Metadata
+              </span>
+              <span className="text-[10px] text-subtle-foreground font-mono">
+                Binding: HTTP-POST
+              </span>
+            </div>
+            <div className="space-y-1 font-mono text-[11px]">
+              <div className="flex items-center justify-between text-muted-foreground bg-card/60 rounded-lg p-2 border border-border/60">
+                <span className="truncate mr-2">ACS URL: <span className="text-foreground">{samlMetadata?.acsUrl || "https://app.pulseboard.io/api/auth/saml/acs"}</span></span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(samlMetadata?.acsUrl || "https://app.pulseboard.io/api/auth/saml/acs");
+                    setCopiedField("acs");
+                    setTimeout(() => setCopiedField(null), 2000);
+                  }}
+                  className="shrink-0 p-1 text-muted-foreground hover:text-foreground"
+                >
+                  {copiedField === "acs" ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+              <div className="flex items-center justify-between text-muted-foreground bg-card/60 rounded-lg p-2 border border-border/60">
+                <span className="truncate mr-2">Entity ID / Audience: <span className="text-foreground">{samlMetadata?.entityId || "https://app.pulseboard.io/saml/metadata"}</span></span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(samlMetadata?.entityId || "https://app.pulseboard.io/saml/metadata");
+                    setCopiedField("entity");
+                    setTimeout(() => setCopiedField(null), 2000);
+                  }}
+                  className="shrink-0 p-1 text-muted-foreground hover:text-foreground"
+                >
+                  {copiedField === "entity" ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="submit"
+              disabled={updateSsoMutation.isPending}
+              className="rounded-xl bg-primary px-4 py-2 font-semibold text-primary-foreground hover:brightness-110 disabled:opacity-50"
+            >
+              {updateSsoMutation.isPending ? "Saving SSO Config..." : "Save SSO Configuration"}
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* Immutable Audit Log Table */}

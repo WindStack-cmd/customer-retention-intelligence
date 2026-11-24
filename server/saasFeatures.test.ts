@@ -386,4 +386,22 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
     expect(intervention.incentiveCode).toBe("SAVE25");
     expect(intervention.incentiveAmount).toBe("25");
   });
+
+  it("configures enterprise SSO / SAML settings and generates metadata", () => {
+    const sso = tenantStorage.saveSsoConfig(testWsId, {
+      provider: "okta",
+      entityId: "https://identity.okta.com/app/pulseboard_saml",
+      ssoUrl: "https://identity.okta.com/app/pulseboard_saml/sso/saml",
+      enforceSso: true,
+      domains: ["pulseboard.io", "enterprise.com"],
+    });
+
+    expect(sso.provider).toBe("okta");
+    expect(sso.enforceSso).toBe(true);
+    expect(sso.domains).toContain("enterprise.com");
+    expect(sso.status).toBe("simulated");
+
+    const fetched = tenantStorage.getSsoConfig(testWsId);
+    expect(fetched.entityId).toBe("https://identity.okta.com/app/pulseboard_saml");
+  });
 });
