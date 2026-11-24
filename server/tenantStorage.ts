@@ -239,6 +239,57 @@ class TenantStorage {
     return ws;
   }
 
+  updateSubscription(
+    workspaceId: string,
+    updates: {
+      plan?: "starter" | "pro" | "enterprise";
+      subscriptionStatus?: string;
+      stripeCustomerId?: string | null;
+      stripeSubscriptionId?: string | null;
+      customerLimit?: number;
+    }
+  ): Workspace {
+    const ws = this.getWorkspace(workspaceId);
+    if (!ws) throw new Error("Workspace not found");
+    if (updates.plan) {
+      ws.plan = updates.plan;
+      if (updates.customerLimit === undefined) {
+        ws.customerLimit =
+          updates.plan === "starter"
+            ? 1000
+            : updates.plan === "enterprise"
+              ? 100000
+              : 10000;
+      }
+    }
+    if (updates.customerLimit !== undefined) ws.customerLimit = updates.customerLimit;
+    if (updates.subscriptionStatus !== undefined)
+      ws.subscriptionStatus = updates.subscriptionStatus;
+    if (updates.stripeCustomerId !== undefined)
+      ws.stripeCustomerId = updates.stripeCustomerId;
+    if (updates.stripeSubscriptionId !== undefined)
+      ws.stripeSubscriptionId = updates.stripeSubscriptionId;
+    ws.updatedAt = new Date();
+    this.save();
+    return ws;
+  }
+
+  findWorkspaceByStripeCustomer(
+    stripeCustomerId: string
+  ): Workspace | undefined {
+    return this.data.workspaces.find(
+      w => w.stripeCustomerId === stripeCustomerId
+    );
+  }
+
+  findWorkspaceByStripeSubscription(
+    stripeSubscriptionId: string
+  ): Workspace | undefined {
+    return this.data.workspaces.find(
+      w => w.stripeSubscriptionId === stripeSubscriptionId
+    );
+  }
+
   // Memberships & Roles
   getMember(workspaceId: string, userId: number): (WorkspaceMember & { userName: string; userEmail: string }) | null {
     // Local development user is always admin of ws_default

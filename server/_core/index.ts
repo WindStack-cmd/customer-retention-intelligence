@@ -12,6 +12,7 @@ import { createRequestId, logger } from "./logger";
 import { ENV } from "./env";
 
 import { tenantStorage } from "../tenantStorage";
+import { stripeWebhookMiddleware } from "../stripeWebhook";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -146,23 +147,8 @@ async function startServer() {
     });
   });
 
-  // Stripe Webhook endpoint
-  app.post("/api/webhooks/stripe", (req, res) => {
-    const event = req.body;
-    console.log(`[Stripe Webhook] Received event: ${event?.type || "unknown"}`);
-    if (
-      event?.type === "customer.subscription.updated" ||
-      event?.type === "checkout.session.completed"
-    ) {
-      const workspaceId = event.data?.object?.client_reference_id;
-      if (workspaceId) {
-        tenantStorage.updateWorkspace(workspaceId, {
-          subscriptionStatus: "active",
-        });
-      }
-    }
-    return res.status(200).json({ received: true });
-  });
+  // Stripe Webhook endpoint with signature verification & mock fallback
+  app.post("/api/webhooks/stripe", stripeWebhookMiddleware);
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   // tRPC API
