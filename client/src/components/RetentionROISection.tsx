@@ -106,9 +106,9 @@ export function RetentionROISection() {
           <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
             <TrendingUp className="h-4 w-4" />
             <span>
-              {roi?.retentionUpliftPercentage != null
-                ? `+${roi.retentionUpliftPercentage}% Observed Difference`
-                : "Awaiting Interventions"}
+              {roi?.totalInterventions === 0 || roi?.retentionUpliftPercentage == null
+                ? "Awaiting Interventions"
+                : `+${roi.retentionUpliftPercentage}% Observed Difference`}
             </span>
           </div>
         </div>
@@ -137,7 +137,7 @@ export function RetentionROISection() {
               {roi?.contactedRetentionRate != null ? `${roi.contactedRetentionRate}%` : "—"}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1">
-              vs {roi?.nonContactedRetentionRate ?? 32.1}% baseline benchmark {roi?.sampleData ? "(Sample data)" : ""}
+              vs {roi?.nonContactedRetentionRate ?? 32.1}% baseline (Sample benchmark) {roi?.sampleData ? "(Sample data)" : ""}
             </p>
           </div>
 

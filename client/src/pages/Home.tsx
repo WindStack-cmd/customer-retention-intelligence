@@ -554,13 +554,23 @@ export default function Home() {
                 </span>
               </p>
               <p className="mt-0.5 text-xs text-subtle-foreground">
-                Production workspace · protected API data
+                {currentWorkspaceQuery.data?.workspace?.id === "ws_default"
+                  ? "Production workspace · protected API data"
+                  : `${currentWorkspaceQuery.data?.workspace?.name ?? "Workspace"} · sample data`}
               </p>
             </div>
           </div>
           <div className="hidden items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-[11px] font-semibold text-foreground sm:flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary" /> Real
-            records
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                currentWorkspaceQuery.data?.workspace?.id === "ws_default"
+                  ? "bg-primary"
+                  : "bg-status-medium-text"
+              }`}
+            />{" "}
+            {currentWorkspaceQuery.data?.workspace?.id === "ws_default"
+              ? "Real records"
+              : "Sample data"}
           </div>
         </header>
         {mobileNav && (
@@ -647,8 +657,16 @@ export default function Home() {
             <div>
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.15em] text-foreground">
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />{" "}
-                  Production data
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      currentWorkspaceQuery.data?.workspace?.id === "ws_default"
+                        ? "bg-primary"
+                        : "bg-status-medium-text"
+                    }`}
+                  />{" "}
+                  {currentWorkspaceQuery.data?.workspace?.id === "ws_default"
+                    ? "Production data"
+                    : "Sample data"}
                 </span>
                 <span className="text-[11px] text-subtle-foreground">
                   30-day behavioral horizon · cutoff{" "}
@@ -719,7 +737,9 @@ export default function Home() {
                   </span>
                   {analystQuota && (
                     <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
-                      {analystQuota.remaining} of {analystQuota.limit} queries left today ({analystQuota.plan})
+                      {analystQuota.limit >= 999999
+                        ? `Unlimited queries (${analystQuota.plan})`
+                        : `${analystQuota.remaining} of ${analystQuota.limit} queries left today (${analystQuota.plan})`}
                     </span>
                   )}
                 </div>

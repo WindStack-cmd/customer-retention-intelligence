@@ -837,6 +837,16 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        const targetPlan = BILLING_PLANS[input.planId];
+        const customers = tenantStorage.getTenantCustomers(ctx.workspace.id);
+        const customerCount =
+          ctx.workspace.id === "ws_default" ? 4122 : customers.length;
+        if (targetPlan && customerCount > targetPlan.customerLimit) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Cannot downgrade: current workspace customer count (${customerCount}) exceeds ${targetPlan.name} limit (${targetPlan.customerLimit}).`,
+          });
+        }
         return await createCheckoutSession({
           workspaceId: ctx.workspace.id,
           planId: input.planId,

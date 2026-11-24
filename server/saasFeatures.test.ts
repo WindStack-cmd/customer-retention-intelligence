@@ -8,6 +8,7 @@ import {
   getJourneyTimeline,
 } from "./cohortAnalytics";
 import { BILLING_PLANS, createCheckoutSession } from "./billingService";
+import { appRouter } from "./routers";
 
 describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
   const testWsId = "ws_default";
@@ -200,6 +201,35 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
     const updatedWs = tenantStorage.getWorkspace(testWsId);
     expect(updatedWs?.plan).toBe("enterprise");
     expect(updatedWs?.customerLimit).toBe(100000);
+  });
+
+  it("prevents downgrading when current customer count exceeds target plan limit", async () => {
+    const adminCaller = appRouter.createCaller({
+      user: {
+        id: 1,
+        openId: "dev-local-user",
+        name: "Local Development User",
+        email: "dev@pulseboard.local",
+        role: "admin",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastLoginAt: new Date(),
+      },
+      workspace: tenantStorage.getWorkspace("ws_default")!,
+      role: "admin",
+      membership: tenantStorage.getMember("ws_default", 1)!,
+      rawWorkspaceId: "ws_default",
+      req: {} as any,
+      res: {} as any,
+    });
+
+    // Default workspace has 4,122 customers (from CSV). Starter plan limit is 1,000.
+    await expect(
+      adminCaller.billing.createCheckout({
+        planId: "starter",
+        returnUrl: "http://localhost:3000",
+      })
+    ).rejects.toThrowError(/Cannot downgrade: current workspace customer count/);
   });
 
   it("tracks audit logs and fulfills GDPR export & erasure compliance", () => {
