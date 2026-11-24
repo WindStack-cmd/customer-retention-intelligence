@@ -433,7 +433,7 @@ export const appRouter = router({
     }),
 
     triggerSync: adminProcedure
-      .input(z.object({ source: z.enum(["stripe", "shopify"]) }))
+      .input(z.object({ source: z.enum(["stripe", "shopify", "sample", "api"]) }))
       .mutation(async ({ ctx, input }) => {
         const currentCount = tenantStorage.getTenantCustomerCount(
           ctx.workspace.id

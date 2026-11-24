@@ -1009,7 +1009,7 @@ class TenantStorage {
     return this.data.integrationsConfig[workspaceId][source];
   }
 
-  updateIntegrationSyncTime(workspaceId: string, source: "stripe" | "shopify") {
+  updateIntegrationSyncTime(workspaceId: string, source: "stripe" | "shopify" | "sample" | "api") {
     if (!this.data.integrationsConfig) this.data.integrationsConfig = {};
     if (!this.data.integrationsConfig[workspaceId])
       this.data.integrationsConfig[workspaceId] = {};
@@ -1057,6 +1057,7 @@ class TenantStorage {
       const score = Math.round(risk * 100);
 
       return {
+        workspaceId,
         customerId: id,
         sourceCustomerId: `EXT-${10000 + idx}`,
         country: countries[idx % countries.length],

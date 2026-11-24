@@ -175,4 +175,28 @@ describe("Phase 1: Multi-Tenancy & RBAC", () => {
     });
     expect(inviteRes.email).toBe("invited-by-admin@test.com");
   });
+
+  it("supports self-service onboarding: creates workspace, assigns plan, and loads initial sample data", async () => {
+    const ws = tenantStorage.createWorkspace({
+      name: "Onboarding Demo Corp",
+      plan: "enterprise",
+      userId: 501,
+      userName: "Founder Alex",
+      userEmail: "alex@democorp.io",
+    });
+
+    expect(ws.plan).toBe("enterprise");
+    expect(ws.customerLimit).toBe(100000);
+
+    // Initial customer count is 0
+    let customers = tenantStorage.getTenantCustomers(ws.id);
+    expect(customers.length).toBe(0);
+
+    // Populate initial sample accounts
+    tenantStorage.populateSampleCustomers(ws.id, 15);
+    customers = tenantStorage.getTenantCustomers(ws.id);
+    expect(customers.length).toBe(15);
+    expect(customers[0].workspaceId).toBe(ws.id);
+    expect(customers[0].calibratedChurnProbability).toBeGreaterThan(0);
+  });
 });
