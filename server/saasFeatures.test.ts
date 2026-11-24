@@ -173,7 +173,9 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
   it("generates cohort retention heatmap, shap waterfall, and journey timeline", () => {
     const heatmap = getCohortRetentionHeatmap(testWsId);
     expect(heatmap.cohorts.length).toBeGreaterThanOrEqual(10);
+    expect(heatmap.cohorts[0].retentionRates.length).toBe(13); // Full M0 through M12
     expect(heatmap.cohorts[0].retentionRates[0]).toBe(100);
+    expect(heatmap.averageRetention.length).toBe(13);
 
     const shap = getShapWaterfall(17850, testWsId);
     expect(shap.features.length).toBeGreaterThan(0);

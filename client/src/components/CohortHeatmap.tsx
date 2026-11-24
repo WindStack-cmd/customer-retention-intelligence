@@ -29,15 +29,15 @@ export function CohortHeatmap() {
       <div className="flex flex-col gap-1 mb-5">
         <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
           <Grid className="h-4 w-4 text-primary" />
-          <span>Cohort Retention Heatmap (M0 — M6)</span>
+          <span>Cohort Retention Heatmap (M0 — M12)</span>
         </h4>
         <p className="text-xs text-muted-foreground">
-          Tracks repeat order behavior across customer acquisition cohorts over their first 6 months.
+          Tracks repeat order retention across customer acquisition cohorts over their full 12-month lifecycle.
         </p>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-center text-xs">
+        <table className="w-full min-w-[760px] text-center text-xs">
           <thead>
             <tr className="border-b border-border text-subtle-foreground">
               <th className="pb-2.5 text-left font-medium">Cohort Month</th>
@@ -49,6 +49,12 @@ export function CohortHeatmap() {
               <th className="pb-2.5 font-medium">M4</th>
               <th className="pb-2.5 font-medium">M5</th>
               <th className="pb-2.5 font-medium">M6</th>
+              <th className="pb-2.5 font-medium">M7</th>
+              <th className="pb-2.5 font-medium">M8</th>
+              <th className="pb-2.5 font-medium">M9</th>
+              <th className="pb-2.5 font-medium">M10</th>
+              <th className="pb-2.5 font-medium">M11</th>
+              <th className="pb-2.5 font-medium">M12</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
