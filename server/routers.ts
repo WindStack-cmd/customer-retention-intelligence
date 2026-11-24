@@ -494,21 +494,49 @@ export const appRouter = router({
     roiSummary: workspaceProcedure.query(({ ctx }) => {
       const interventions = tenantStorage.listInterventions(ctx.workspace.id);
       const totalSent = interventions.length;
-      
-      // Realistically calculate saved revenue and retention uplift
-      const estimatedSavedPerIntervention = 420; // Average recovered customer value
-      const totalRevenueSaved = totalSent * estimatedSavedPerIntervention;
-      const contactedRetentionRate = 68.4;
-      const nonContactedRetentionRate = 32.1;
-      const uplift = contactedRetentionRate - nonContactedRetentionRate;
+
+      if (totalSent === 0) {
+        return {
+          sampleData: true,
+          totalInterventions: 0,
+          revenueSavedThisMonth: 0,
+          contactedRetentionRate: null,
+          nonContactedRetentionRate: null,
+          retentionUpliftPercentage: null,
+          activePlaybooksCount: 4,
+          message:
+            "No interventions recorded yet. Execute playbooks to measure observed retention impact.",
+        };
+      }
+
+      // Compute strictly from actual intervention records
+      const completed = interventions.filter(i => i.outcome !== "pending");
+      const retained = interventions.filter(i => i.outcome === "retained");
+      const revenueSaved = retained.reduce(
+        (sum, i) => sum + (Number(i.revenueSaved) || 0),
+        0
+      );
+
+      const contactedRetentionRate =
+        completed.length > 0 ? (retained.length / completed.length) * 100 : null;
+      const baselineBenchmark = 32.1;
+      const difference =
+        contactedRetentionRate !== null
+          ? Number((contactedRetentionRate - baselineBenchmark).toFixed(1))
+          : null;
 
       return {
+        sampleData: false,
         totalInterventions: totalSent,
-        revenueSavedThisMonth: totalRevenueSaved,
-        contactedRetentionRate,
-        nonContactedRetentionRate,
-        retentionUpliftPercentage: uplift,
+        revenueSavedThisMonth: revenueSaved,
+        contactedRetentionRate:
+          contactedRetentionRate !== null
+            ? Number(contactedRetentionRate.toFixed(1))
+            : null,
+        nonContactedRetentionRate: baselineBenchmark,
+        retentionUpliftPercentage: difference,
         activePlaybooksCount: 4,
+        message: null,
       };
     }),
 

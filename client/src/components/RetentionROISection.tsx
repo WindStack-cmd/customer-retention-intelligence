@@ -30,18 +30,33 @@ export function RetentionROISection() {
     <div className="space-y-6">
       {/* ROI & Saved Revenue Highlight */}
       <div className="rounded-2xl border border-border bg-card p-6 shadow-2xl">
+        {roi?.sampleData && (
+          <div className="mb-5 rounded-xl border border-primary/20 bg-primary/10 p-3.5 text-xs text-primary flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="h-4 w-4 shrink-0" />
+              <span>
+                <strong>SAMPLE ESTIMATES</strong> — no interventions recorded yet. Connect playbooks and record actions to measure real impact.
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-5">
           <div>
             <h3 className="font-display text-lg font-semibold text-foreground">
               Retention Outcome & ROI Tracking
             </h3>
             <p className="text-xs text-muted-foreground">
-              Direct measurement of recovered revenue and cohort retention uplift from automated playbooks.
+              Direct measurement of recovered revenue and pre/post retention difference from recorded playbooks.
             </p>
           </div>
           <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
             <TrendingUp className="h-4 w-4" />
-            <span>+{roi?.retentionUpliftPercentage || 36.3}% Retention Uplift</span>
+            <span>
+              {roi?.retentionUpliftPercentage != null
+                ? `+${roi.retentionUpliftPercentage}% Observed Difference`
+                : "Awaiting Interventions"}
+            </span>
           </div>
         </div>
 
@@ -49,29 +64,35 @@ export function RetentionROISection() {
           <div className="rounded-xl border border-border bg-background p-4">
             <p className="text-xs text-muted-foreground">Revenue Saved This Month</p>
             <p className="font-display text-2xl font-bold text-foreground mt-1">
-              £{(roi?.revenueSavedThisMonth || 12450).toLocaleString()}
+              £{(roi?.revenueSavedThisMonth ?? 0).toLocaleString()}
             </p>
-            <p className="text-[11px] text-primary mt-1">Based on verified recovered accounts</p>
+            <p className="text-[11px] text-primary mt-1">
+              {roi?.sampleData ? "Awaiting recovered accounts" : "Based on verified recovered accounts"}
+            </p>
           </div>
 
           <div className="rounded-xl border border-border bg-background p-4">
             <p className="text-xs text-muted-foreground">Contacted Cohort Retention</p>
             <p className="font-display text-2xl font-bold text-status-protective-text mt-1">
-              {roi?.contactedRetentionRate || 68.4}%
+              {roi?.contactedRetentionRate != null ? `${roi.contactedRetentionRate}%` : "—"}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1">
-              vs {roi?.nonContactedRetentionRate || 32.1}% for uncontacted accounts
+              vs {roi?.nonContactedRetentionRate ?? 32.1}% baseline benchmark
             </p>
           </div>
 
           <div className="rounded-xl border border-border bg-background p-4">
             <p className="text-xs text-muted-foreground">Executed Playbooks</p>
             <p className="font-display text-2xl font-bold text-foreground mt-1">
-              {roi?.totalInterventions || 32}
+              {roi?.totalInterventions ?? 0}
             </p>
-            <p className="text-[11px] text-muted-foreground mt-1">Win-back emails & CSM outreaches</p>
+            <p className="text-[11px] text-muted-foreground mt-1">Recorded playbook interventions</p>
           </div>
         </div>
+
+        <p className="mt-4 text-[11px] text-muted-foreground italic border-t border-border pt-2.5">
+          Methodology: Observed outcomes, not guaranteed causal impact. Causal uplift requires prospective randomized holdout testing.
+        </p>
       </div>
 
       {/* Playbook Templates */}
