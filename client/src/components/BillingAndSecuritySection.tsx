@@ -32,7 +32,7 @@ export function BillingAndSecuritySection() {
   const [ssoUrl, setSsoUrl] = useState("");
   const [ssoCert, setSsoCert] = useState("");
   const [enforceSso, setEnforceSso] = useState(false);
-  const [ssoDomain, setSsoDomain] = useState("pulseboard.io");
+  const [ssoDomain, setSsoDomain] = useState("");
   const [ssoMessage, setSsoMessage] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -43,7 +43,7 @@ export function BillingAndSecuritySection() {
       setSsoUrl(ssoConfig.ssoUrl);
       setSsoCert(ssoConfig.certificateFingerprint || "");
       setEnforceSso(ssoConfig.enforceSso);
-      setSsoDomain(ssoConfig.domains.join(", "));
+      setSsoDomain(ssoConfig.domains?.join(", ") || "");
     }
   }, [ssoConfig]);
 
@@ -58,13 +58,17 @@ export function BillingAndSecuritySection() {
   const checkoutMutation = trpc.billing.createCheckout.useMutation({
     onSuccess: (res) => {
       if (res.mode === "mock") {
-        setUpgradeMessage("Subscription tier successfully upgraded in simulated mode!");
+        setUpgradeMessage("Subscription tier updated successfully in simulated mode!");
         utils.billing.subscription.invalidate();
         utils.workspace.current.invalidate();
         setTimeout(() => setUpgradeMessage(null), 5000);
       } else if (res.url) {
         window.location.href = res.url;
       }
+    },
+    onError: (err) => {
+      setUpgradeMessage(err.message);
+      setTimeout(() => setUpgradeMessage(null), 6000);
     },
   });
 
@@ -90,7 +94,7 @@ export function BillingAndSecuritySection() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full overflow-hidden">
       {/* Header */}
       <div>
         <h3 className="font-display text-lg font-semibold text-foreground">
@@ -180,22 +184,41 @@ export function BillingAndSecuritySection() {
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-border">
-                  <button
-                    disabled={isCurrent || checkoutMutation.isPending}
-                    onClick={() =>
-                      checkoutMutation.mutate({
-                        planId: p.id,
-                        returnUrl: window.location.href,
-                      })
-                    }
-                    className={`w-full rounded-lg py-1.5 text-xs font-semibold transition ${
-                      isCurrent
-                        ? "border border-border text-muted-foreground opacity-50 cursor-default"
-                        : "bg-primary text-primary-foreground hover:brightness-110"
-                    }`}
-                  >
-                    {isCurrent ? "Current Plan" : "Upgrade to " + p.name}
-                  </button>
+                  {(() => {
+                    const isDowngrade =
+                      p.customerLimit < (subscription?.customerLimit ?? 0);
+                    const isBlocked =
+                      isDowngrade &&
+                      (subscription?.currentCustomerCount ?? 0) >
+                        p.customerLimit;
+                    const buttonLabel = isCurrent
+                      ? "Current Plan"
+                      : isBlocked
+                      ? `Exceeds Limit (${subscription?.currentCustomerCount ?? 0}/${p.customerLimit})`
+                      : isDowngrade
+                      ? "Downgrade to " + p.name
+                      : "Upgrade to " + p.name;
+                    return (
+                      <button
+                        disabled={
+                          isCurrent || isBlocked || checkoutMutation.isPending
+                        }
+                        onClick={() =>
+                          checkoutMutation.mutate({
+                            planId: p.id,
+                            returnUrl: window.location.href,
+                          })
+                        }
+                        className={`w-full rounded-lg py-1.5 text-xs font-semibold transition ${
+                          isCurrent || isBlocked
+                            ? "border border-border text-muted-foreground opacity-50 cursor-default"
+                            : "bg-primary text-primary-foreground hover:brightness-110"
+                        }`}
+                      >
+                        {buttonLabel}
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
             );
@@ -260,9 +283,20 @@ export function BillingAndSecuritySection() {
               Federated identity integration for Google Workspace, Microsoft Entra ID, and Okta.
             </p>
           </div>
-          <span className="self-start sm:self-auto rounded-full bg-accent-soft border border-border px-2.5 py-0.5 text-[10px] text-muted-foreground font-mono">
-            Mock Mode (Simulated Handshake)
+          <span className="self-start sm:self-auto rounded-full bg-status-medium-bg border border-status-medium-border px-2.5 py-0.5 text-[10px] text-status-medium-text font-mono font-medium">
+            Partial (Login Inactive - Validation Pending)
           </span>
+        </div>
+
+        {/* Informational banner: SAML login not active until library validation enabled */}
+        <div className="mb-4 rounded-xl border border-status-medium-border bg-status-medium-bg/30 p-3 text-xs text-status-medium-text flex items-start gap-2.5">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-status-medium-text" />
+          <div className="space-y-0.5">
+            <p className="font-semibold text-foreground">SAML login is not active until validation is enabled.</p>
+            <p className="text-[11px] text-muted-foreground">
+              SP metadata and IdP configuration are operational. The Assertion Consumer Service (ACS) strictly returns HTTP 501 to prevent insecure authentication until an approved XML signature validation library (e.g. <span className="font-mono text-foreground">@node-saml/node-saml</span>) is approved and installed.
+            </p>
+          </div>
         </div>
 
         {ssoMessage && (
@@ -370,11 +404,22 @@ export function BillingAndSecuritySection() {
               type="checkbox"
               id="enforceSso"
               checked={enforceSso}
+              disabled={!ssoUrl.trim() || !ssoEntityId.trim()}
               onChange={(e) => setEnforceSso(e.target.checked)}
-              className="rounded border-border bg-background text-primary focus:ring-0"
+              className="rounded border-border bg-background text-primary focus:ring-0 disabled:opacity-40"
             />
-            <label htmlFor="enforceSso" className="text-foreground">
-              Enforce SSO authentication for all users with matching email domains
+            <label
+              htmlFor="enforceSso"
+              className={`text-foreground ${
+                !ssoUrl.trim() || !ssoEntityId.trim()
+                  ? "opacity-60 cursor-not-allowed"
+                  : ""
+              }`}
+            >
+              Enforce SSO authentication for all users with matching email domains{" "}
+              {!ssoUrl.trim() || !ssoEntityId.trim()
+                ? "(requires configured IdP details above)"
+                : ""}
             </label>
           </div>
 

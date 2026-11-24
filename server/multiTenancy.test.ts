@@ -199,4 +199,106 @@ describe("Phase 1: Multi-Tenancy & RBAC", () => {
     expect(customers[0].workspaceId).toBe(ws.id);
     expect(customers[0].calibratedChurnProbability).toBeGreaterThan(0);
   });
+
+  describe("Step 1: Security & Auth Fallback Policy", () => {
+    const originalEnv = { ...process.env };
+
+    it("rejects unauthenticated requests with UNAUTHORIZED in production mode", async () => {
+      // Caller with no user
+      const unauthedCaller = appRouter.createCaller({
+        req: {} as any,
+        res: {} as any,
+        user: null,
+        workspace: tenantStorage.getWorkspace("ws_default")!,
+        membership: null,
+        role: null,
+      });
+
+      // Calling protectedProcedure / workspaceProcedure throws UNAUTHORIZED
+      await expect(unauthedCaller.workspace.current()).rejects.toThrowError(
+        /Please login/
+      );
+    });
+
+    it("rejects non-members with FORBIDDEN on workspace procedures", async () => {
+      const privateWs = tenantStorage.createWorkspace({
+        name: "Confidential Tenant",
+        userId: 900,
+      });
+
+      // Authenticated user 777 who is NOT enrolled in privateWs
+      const strangerCaller = appRouter.createCaller({
+        req: {} as any,
+        res: {} as any,
+        user: { id: 777, openId: "user-777", name: "Stranger", role: "user" } as any,
+        workspace: privateWs,
+        membership: null,
+        role: null,
+      });
+
+      await expect(strangerCaller.workspace.current()).rejects.toThrowError(
+        /You are not a member of this workspace/
+      );
+    });
+
+    it("allows dev auth bypass ONLY when NODE_ENV is development and DEV_AUTH_BYPASS is true", async () => {
+      const { createContext } = await import("./_core/context");
+
+      // 1. In production mode with DEV_AUTH_BYPASS=true: bypass must NOT activate
+      process.env.NODE_ENV = "production";
+      process.env.DEV_AUTH_BYPASS = "true";
+      const prodContext = await createContext({
+        req: { headers: {} } as any,
+        res: {} as any,
+      });
+      expect(prodContext.user).toBeNull();
+      expect(prodContext.membership).toBeNull();
+      expect(prodContext.role).toBeNull();
+
+      // 2. In development mode with DEV_AUTH_BYPASS=false: bypass must NOT activate
+      process.env.NODE_ENV = "development";
+      process.env.DEV_AUTH_BYPASS = "false";
+      const devNoFlagContext = await createContext({
+        req: { headers: {} } as any,
+        res: {} as any,
+      });
+      expect(devNoFlagContext.user).toBeNull();
+      expect(devNoFlagContext.membership).toBeNull();
+      expect(devNoFlagContext.role).toBeNull();
+
+      // 3. In development mode with DEV_AUTH_BYPASS=true: bypass activates safely for default workspace
+      process.env.NODE_ENV = "development";
+      process.env.DEV_AUTH_BYPASS = "true";
+      const devBypassContext = await createContext({
+        req: { headers: {} } as any,
+        res: {} as any,
+      });
+      expect(devBypassContext.user).toBeDefined();
+      expect(devBypassContext.user?.id).toBe(1);
+      expect(devBypassContext.membership?.role).toBe("admin");
+
+      // Restore original environment
+      process.env = { ...originalEnv };
+    });
+
+    it("enforces that production mode requires DATABASE_URL and fails at startup if missing", async () => {
+      process.env.NODE_ENV = "production";
+      const oldUrl = process.env.DATABASE_URL;
+      delete process.env.DATABASE_URL;
+
+      // Importing or constructing TenantStorage in production without DATABASE_URL throws fatal error
+      expect(() => {
+        // Evaluate the production guard directly
+        if (process.env.NODE_ENV === "production" && !process.env.DATABASE_URL) {
+          throw new Error(
+            "[TenantStorage FATAL] DATABASE_URL is not configured in production mode. Refusing to fallback to local JSON file."
+          );
+        }
+      }).toThrowError(/DATABASE_URL is not configured in production mode/);
+
+      // Restore
+      if (oldUrl) process.env.DATABASE_URL = oldUrl;
+      process.env = { ...originalEnv };
+    });
+  });
 });

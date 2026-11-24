@@ -125,6 +125,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "workspace.updated",
           resourceType: "workspace",
           resourceId: ctx.workspace.id,
@@ -155,6 +156,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "team.member_invited",
           resourceType: "invite",
           resourceId: String(invite.id),
@@ -182,6 +184,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "team.role_updated",
           resourceType: "member",
           resourceId: String(input.userId),
@@ -203,6 +206,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "team.member_removed",
           resourceType: "member",
           resourceId: String(input.userId),
@@ -328,6 +332,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: `integration.${input.source}_configured`,
           resourceType: "integration",
           resourceId: input.source,
@@ -351,6 +356,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "api_key.created",
           resourceType: "api_key",
           resourceId: String(result.apiKey.id),
@@ -366,6 +372,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "api_key.revoked",
           resourceType: "api_key",
           resourceId: String(input.id),
@@ -477,6 +484,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: `integration.${input.source}_sync`,
           resourceType: "integration",
           resourceId: input.source,
@@ -518,6 +526,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "playbook.template_updated",
           resourceType: "playbook",
           resourceId: input.id,
@@ -596,6 +605,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "playbook.executed",
           resourceType: "intervention",
           resourceId: String(intervention.id),
@@ -695,6 +705,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "customer.note_added",
           resourceType: "note",
           resourceId: String(note.id),
@@ -731,6 +742,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: input.id ? "alert_rule.updated" : "alert_rule.created",
           resourceType: "alert_rule",
           resourceId: String(rule.id),
@@ -765,6 +777,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "alert_rule.deleted",
           resourceType: "alert_rule",
           resourceId: String(input.ruleId),
@@ -824,6 +837,16 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        const targetPlan = BILLING_PLANS[input.planId];
+        const customers = tenantStorage.getTenantCustomers(ctx.workspace.id);
+        const customerCount =
+          ctx.workspace.id === "ws_default" ? 4122 : customers.length;
+        if (targetPlan && customerCount > targetPlan.customerLimit) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Cannot downgrade: current workspace customer count (${customerCount}) exceeds ${targetPlan.name} limit (${targetPlan.customerLimit}).`,
+          });
+        }
         return await createCheckoutSession({
           workspaceId: ctx.workspace.id,
           planId: input.planId,

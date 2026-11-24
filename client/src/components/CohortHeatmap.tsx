@@ -68,15 +68,21 @@ export function CohortHeatmap() {
                 </td>
                 {c.retentionRates.map((rate, idx) => (
                   <td key={idx} className="p-1">
-                    <div
-                      className="rounded-lg py-1.5 px-2 font-mono text-[11px] font-medium transition"
-                      style={{
-                        backgroundColor: getCellBg(rate),
-                        color: rate > 30 ? "var(--foreground)" : "var(--muted-foreground)",
-                      }}
-                    >
-                      {rate.toFixed(1)}%
-                    </div>
+                    {rate !== null ? (
+                      <div
+                        className="rounded-lg py-1.5 px-2 font-mono text-[11px] font-medium transition"
+                        style={{
+                          backgroundColor: getCellBg(rate),
+                          color: rate > 30 ? "var(--foreground)" : "var(--muted-foreground)",
+                        }}
+                      >
+                        {rate.toFixed(1)}%
+                      </div>
+                    ) : (
+                      <div className="py-1.5 px-2 font-mono text-[11px] text-border/60 select-none">
+                        —
+                      </div>
+                    )}
                   </td>
                 ))}
               </tr>
@@ -87,16 +93,27 @@ export function CohortHeatmap() {
               <td className="py-3 text-muted-foreground">4,122</td>
               {averageRetention.map((avg, idx) => (
                 <td key={idx} className="p-1">
-                  <div
-                    className="rounded-lg py-1.5 px-2 font-mono text-[11px] text-primary bg-primary/10 border border-primary/20"
-                  >
-                    {avg.toFixed(1)}%
-                  </div>
+                  {avg !== null ? (
+                    <div
+                      className="rounded-lg py-1.5 px-2 font-mono text-[11px] text-primary bg-primary/10 border border-primary/20"
+                    >
+                      {avg.toFixed(1)}%
+                    </div>
+                  ) : (
+                    <div className="py-1.5 px-2 font-mono text-[11px] text-border/60 select-none">
+                      —
+                    </div>
+                  )}
                 </td>
               ))}
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-4 pt-3 border-t border-border flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-[11px] text-muted-foreground">
+        <span>Observed repeat orders by customer first-purchase month. Future periods unobserved before cutoff stay empty.</span>
+        <span className="font-mono text-foreground font-medium">Dataset Cutoff: 9 Nov 2011</span>
       </div>
     </div>
   );
