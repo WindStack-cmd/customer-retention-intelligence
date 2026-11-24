@@ -50,6 +50,18 @@ export function IntegrationsSection() {
     },
   });
 
+  const [confirmRevokeKey, setConfirmRevokeKey] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
+
+  const rotateKeyMutation = trpc.integrations.rotateApiKey.useMutation({
+    onSuccess: (data) => {
+      setCreatedKeySecret(data.rawSecret);
+      utils.integrations.apiKeys.invalidate();
+    },
+  });
+
   const revokeKeyMutation = trpc.integrations.revokeApiKey.useMutation({
     onSuccess: () => {
       utils.integrations.apiKeys.invalidate();
@@ -293,13 +305,24 @@ export function IntegrationsSection() {
                     {k.keyPrefix}••••••••••••••••••••••••
                   </p>
                 </div>
-                <button
-                  onClick={() => revokeKeyMutation.mutate({ id: k.id })}
-                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-status-urgent-bg hover:text-status-urgent-text"
-                  title="Revoke Key"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => rotateKeyMutation.mutate({ id: k.id })}
+                    disabled={rotateKeyMutation.isPending}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
+                    title="Rotate Key (creates replacement and revokes old)"
+                  >
+                    <RotateCw className="h-3.5 w-3.5" />
+                    <span>Rotate</span>
+                  </button>
+                  <button
+                    onClick={() => setConfirmRevokeKey({ id: k.id, name: k.name })}
+                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-status-urgent-bg hover:text-status-urgent-text"
+                    title="Revoke Key"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -457,6 +480,36 @@ export function IntegrationsSection() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {confirmRevokeKey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-2xl">
+            <h3 className="font-display text-sm font-semibold text-foreground">
+              Revoke API Key
+            </h3>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              Are you sure you want to revoke <strong>{confirmRevokeKey.name}</strong>? Any services or inbound event streams using this key will immediately fail with 401 Unauthorized.
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setConfirmRevokeKey(null)}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  revokeKeyMutation.mutate({ id: confirmRevokeKey.id });
+                  setConfirmRevokeKey(null);
+                }}
+                className="rounded-lg bg-status-urgent-text px-3.5 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+              >
+                Yes, Revoke Key
+              </button>
+            </div>
           </div>
         </div>
       )}

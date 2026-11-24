@@ -373,6 +373,42 @@ export const appRouter = router({
         return { success: ok };
       }),
 
+    rotateApiKey: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ ctx, input }) => {
+        const key = tenantStorage
+          .listApiKeys(ctx.workspace.id)
+          .find(k => k.id === input.id);
+        if (!key) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "API key not found",
+          });
+        }
+        // 1. Create replacement key with the same name
+        const result = tenantStorage.createApiKey(
+          ctx.workspace.id,
+          key.name,
+          ctx.user?.id || 1
+        );
+        // 2. Revoke old key
+        tenantStorage.revokeApiKey(ctx.workspace.id, input.id);
+
+        tenantStorage.logAudit({
+          workspaceId: ctx.workspace.id,
+          userId: ctx.user?.id,
+          action: "api_key.rotated",
+          resourceType: "api_key",
+          resourceId: String(result.apiKey.id),
+          details: {
+            oldKeyId: input.id,
+            newKeyPrefix: result.apiKey.keyPrefix,
+          },
+        });
+
+        return result;
+      }),
+
     events: workspaceProcedure
       .input(z.object({ limit: z.number().optional() }).optional())
       .query(({ ctx, input }) => {

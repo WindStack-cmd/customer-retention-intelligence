@@ -267,4 +267,29 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
     expect(customers[0].priorityBand).toBeDefined();
     expect(customers[0].calibratedChurnProbability).toBeGreaterThan(0);
   });
+
+  it("rotates an API key: creates replacement with same name and revokes old key", () => {
+    const ws = tenantStorage.createWorkspace({
+      name: "Key Rotation WS",
+      userId: 556,
+    });
+
+    const initial = tenantStorage.createApiKey(ws.id, "Production Event Stream", 556);
+    expect(initial.apiKey.id).toBeGreaterThan(0);
+    expect(tenantStorage.verifyApiKey(initial.rawSecret)?.id).toBe(initial.apiKey.id);
+
+    // Rotate: create replacement key with same name
+    const rotated = tenantStorage.createApiKey(ws.id, initial.apiKey.name, 556);
+    tenantStorage.revokeApiKey(ws.id, initial.apiKey.id);
+
+    expect(rotated.apiKey.id).not.toBe(initial.apiKey.id);
+    expect(rotated.apiKey.name).toBe(initial.apiKey.name);
+
+    // Old key is revoked
+    expect(tenantStorage.verifyApiKey(initial.rawSecret)).toBeNull();
+
+    // New key is valid
+    const verifiedNew = tenantStorage.verifyApiKey(rotated.rawSecret);
+    expect(verifiedNew?.id).toBe(rotated.apiKey.id);
+  });
 });
