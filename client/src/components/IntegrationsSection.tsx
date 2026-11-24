@@ -19,6 +19,7 @@ export function IntegrationsSection() {
   const { data: apiKeys } = trpc.integrations.apiKeys.useQuery();
   const { data: events } = trpc.integrations.events.useQuery({ limit: 20 });
   const { data: scoringRuns } = trpc.integrations.scoringRuns.useQuery({ limit: 5 });
+  const { data: schedule } = trpc.integrations.schedulerStatus.useQuery();
 
   const [newKeyName, setNewKeyName] = useState("");
   const [createdKeySecret, setCreatedKeySecret] = useState<string | null>(null);
@@ -255,10 +256,21 @@ export function IntegrationsSection() {
 
       {/* Scoring Runs History */}
       <div className="rounded-2xl border border-border bg-card p-5 shadow-2xl">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-          <Clock className="h-4 w-4 text-primary" />
-          <span>Recent Scoring Runs</span>
-        </h4>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+            <Clock className="h-4 w-4 text-primary" />
+            <span>Recent Scoring Runs</span>
+          </h4>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+            Auto-scoring: {schedule?.scheduleDescription || "Active (daily at 02:00 UTC)"}
+          </span>
+        </div>
+        {schedule?.nextScheduledRun && (
+          <p className="text-[11px] text-muted-foreground mb-3">
+            Next scheduled run: {new Date(schedule.nextScheduledRun).toUTCString()}
+          </p>
+        )}
         <div className="space-y-2">
           {scoringRuns?.length === 0 ? (
             <p className="text-xs text-muted-foreground py-2">No scoring runs recorded yet.</p>

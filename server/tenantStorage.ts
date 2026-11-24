@@ -142,6 +142,10 @@ class TenantStorage {
   }
 
   // Workspaces
+  listAllWorkspaces(): Workspace[] {
+    return [...this.data.workspaces];
+  }
+
   getWorkspace(id: string): Workspace | null {
     return this.data.workspaces.find(w => w.id === id) ?? null;
   }
@@ -522,6 +526,20 @@ class TenantStorage {
 
   // Scoring Runs
   createScoringRun(workspaceId: string, triggerType: "scheduled" | "manual" | "sync"): ScoringRun {
+    // Expire stale runs older than 30 minutes
+    const staleThreshold = Date.now() - 30 * 60 * 1000;
+    for (const r of this.data.scoringRuns) {
+      if (
+        r.workspaceId === workspaceId &&
+        (r.status === "running" || r.status === "pending") &&
+        new Date(r.startedAt).getTime() < staleThreshold
+      ) {
+        r.status = "failed";
+        r.error = "Scoring run timed out (stale execution)";
+        r.completedAt = new Date();
+      }
+    }
+
     // Ensure no job is currently running for this tenant
     const active = this.data.scoringRuns.find(
       r => r.workspaceId === workspaceId && (r.status === "running" || r.status === "pending")

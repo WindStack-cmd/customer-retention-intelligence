@@ -13,6 +13,7 @@ import { ENV } from "./env";
 
 import { tenantStorage } from "../tenantStorage";
 import { stripeWebhookMiddleware } from "../stripeWebhook";
+import { startScoringScheduler } from "../scoringScheduler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -187,6 +188,7 @@ async function startServer() {
     console.log(
       `  \x1b[32m➜\x1b[0m  \x1b[1mHealth:\x1b[0m  \x1b[36mhttp://localhost:${port}/health\x1b[0m\n`
     );
+    startScoringScheduler();
   });
 }
 

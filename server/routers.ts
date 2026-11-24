@@ -28,6 +28,7 @@ import { analystQuestionSchema, answerAnalystQuestion } from "./analyst";
 import { tenantStorage, type Role } from "./tenantStorage";
 import { sendPlaybookEmail, dispatchAlert } from "./playbookService";
 import { executeScoringRun } from "./scoringRunner";
+import { getSchedulerStatus } from "./scoringScheduler";
 import {
   BILLING_PLANS,
   createCheckoutSession,
@@ -368,6 +369,10 @@ export const appRouter = router({
           input?.limit ?? 10
         );
       }),
+
+    schedulerStatus: workspaceProcedure.query(({ ctx }) => {
+      return getSchedulerStatus(ctx.workspace.id);
+    }),
 
     triggerScoring: csmProcedure.mutation(async ({ ctx }) => {
       return await executeScoringRun(ctx.workspace.id, "manual");
