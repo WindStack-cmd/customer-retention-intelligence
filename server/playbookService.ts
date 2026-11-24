@@ -13,7 +13,7 @@ export interface PlaybookEmailPayload {
 }
 
 export interface WebhookAlertPayload {
-  channel: "slack" | "webhook" | "hubspot";
+  channel: "slack" | "webhook" | "hubspot" | "salesforce";
   webhookUrl?: string | null;
   customerName: string;
   sourceCustomerId: string;
@@ -127,11 +127,93 @@ export async function sendPlaybookEmail(
 }
 
 /**
- * Dispatches automated alerts to Slack, Webhooks, or HubSpot.
+ * Dispatches automated alerts to Slack, Webhooks, HubSpot, or Salesforce CRM.
  */
 export async function dispatchAlert(
   payload: WebhookAlertPayload
 ): Promise<{ success: boolean; status: "dispatched" | "simulated"; detail: string }> {
+  // 1. HubSpot CRM Task API
+  if (payload.channel === "hubspot") {
+    const token = process.env.HUBSPOT_ACCESS_TOKEN;
+    if (token && !token.includes("placeholder")) {
+      try {
+        const res = await fetch("https://api.hubapi.com/crm/v3/objects/tasks", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            properties: {
+              hs_task_body: `Urgent Retention Alert: Customer ${payload.sourceCustomerId} (${payload.customerName}) has ${(payload.riskProbability * 100).toFixed(1)}% churn risk with $${payload.revenueAtRisk.toLocaleString()} revenue at risk. Recommended Action: ${payload.recommendedAction}`,
+              hs_task_subject: `🚨 High Churn Risk: Customer ${payload.sourceCustomerId}`,
+              hs_task_status: "NOT_STARTED",
+              hs_task_priority: "HIGH",
+            },
+          }),
+        });
+        if (res.ok) {
+          return {
+            success: true,
+            status: "dispatched",
+            detail: `Created HubSpot CRM task for Account ${payload.sourceCustomerId}`,
+          };
+        }
+      } catch (err) {
+        console.warn("[AlertService] HubSpot API error, falling back to mock:", err);
+      }
+    }
+    console.log(
+      `[CRM Alert MOCK] Created Task for Account ${payload.sourceCustomerId} (HubSpot: Priority High, Risk: ${(payload.riskProbability * 100).toFixed(0)}%)`
+    );
+    return {
+      success: true,
+      status: "simulated",
+      detail: `[CRM Alert MOCK] Created Task for Account ${payload.sourceCustomerId}`,
+    };
+  }
+
+  // 2. Salesforce CRM Task API
+  if (payload.channel === "salesforce") {
+    const token = process.env.SALESFORCE_ACCESS_TOKEN;
+    const instanceUrl = process.env.SALESFORCE_INSTANCE_URL || "https://login.salesforce.com";
+    if (token && !token.includes("placeholder")) {
+      try {
+        const res = await fetch(`${instanceUrl}/services/data/v58.0/sobjects/Task/`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            Subject: `🚨 Urgent Churn Risk: Customer ${payload.sourceCustomerId}`,
+            Description: `Customer ${payload.sourceCustomerId} (${payload.customerName}) shows high churn probability of ${(payload.riskProbability * 100).toFixed(1)}% ($${payload.revenueAtRisk.toLocaleString()} revenue at risk). Action: ${payload.recommendedAction}`,
+            Priority: "High",
+            Status: "Not Started",
+          }),
+        });
+        if (res.ok) {
+          return {
+            success: true,
+            status: "dispatched",
+            detail: `Created Salesforce CRM task for Account ${payload.sourceCustomerId}`,
+          };
+        }
+      } catch (err) {
+        console.warn("[AlertService] Salesforce API error, falling back to mock:", err);
+      }
+    }
+    console.log(
+      `[CRM Alert MOCK] Created Task for Account ${payload.sourceCustomerId} (Salesforce: Priority High, Risk: ${(payload.riskProbability * 100).toFixed(0)}%)`
+    );
+    return {
+      success: true,
+      status: "simulated",
+      detail: `[CRM Alert MOCK] Created Task for Account ${payload.sourceCustomerId}`,
+    };
+  }
+
+  // 3. Webhook / Slack
   if (payload.webhookUrl && payload.webhookUrl.startsWith("http")) {
     try {
       const res = await fetch(payload.webhookUrl, {

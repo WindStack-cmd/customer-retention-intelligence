@@ -747,7 +747,7 @@ class TenantStorage {
     id?: number;
     workspaceId: string;
     name: string;
-    channel: "slack" | "webhook" | "hubspot";
+    channel: "slack" | "webhook" | "hubspot" | "salesforce";
     webhookUrl?: string | null;
     thresholdBand: "Urgent" | "High" | "Any";
     minRiskProbability: string;
@@ -785,6 +785,16 @@ class TenantStorage {
     this.data.alertRules.splice(idx, 1);
     this.save();
     return true;
+  }
+
+  toggleAlertRule(workspaceId: string, ruleId: number): AlertRule | null {
+    const rule = this.data.alertRules.find(
+      r => r.workspaceId === workspaceId && r.id === ruleId
+    );
+    if (!rule) return null;
+    rule.enabled = rule.enabled === 1 ? 0 : 1;
+    this.save();
+    return rule;
   }
 
   // Audit Logs

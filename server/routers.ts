@@ -713,7 +713,7 @@ export const appRouter = router({
         z.object({
           id: z.number().optional(),
           name: z.string().min(2).max(128),
-          channel: z.enum(["slack", "webhook", "hubspot"]),
+          channel: z.enum(["slack", "webhook", "hubspot", "salesforce"]),
           webhookUrl: z.string().url().optional(),
           thresholdBand: z.enum(["Urgent", "High", "Any"]),
           minRiskProbability: z.string(),
@@ -740,10 +740,28 @@ export const appRouter = router({
         return rule;
       }),
 
+    toggleAlertRule: adminProcedure
+      .input(z.object({ ruleId: z.number() }))
+      .mutation(({ ctx, input }) => {
+        const rule = tenantStorage.toggleAlertRule(
+          ctx.workspace.id,
+          input.ruleId
+        );
+        if (!rule)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Alert rule not found",
+          });
+        return rule;
+      }),
+
     deleteAlertRule: adminProcedure
       .input(z.object({ ruleId: z.number() }))
       .mutation(({ ctx, input }) => {
-        const ok = tenantStorage.deleteAlertRule(ctx.workspace.id, input.ruleId);
+        const ok = tenantStorage.deleteAlertRule(
+          ctx.workspace.id,
+          input.ruleId
+        );
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
@@ -758,7 +776,7 @@ export const appRouter = router({
       .input(
         z.object({
           ruleId: z.number().optional(),
-          channel: z.enum(["slack", "webhook", "hubspot"]),
+          channel: z.enum(["slack", "webhook", "hubspot", "salesforce"]),
           webhookUrl: z.string().optional(),
         })
       )
@@ -845,12 +863,15 @@ export const appRouter = router({
           .listInterventions(ctx.workspace.id)
           .filter(i => i.customerId === input.customerId);
 
+        const requester = ctx.user?.email || ctx.user?.name || "Admin User";
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || "System",
           action: "compliance.gdpr_export",
           resourceType: "customer",
           resourceId: String(input.customerId),
+          details: { requestedBy: requester },
         });
 
         return {
@@ -866,13 +887,15 @@ export const appRouter = router({
     gdprErase: adminProcedure
       .input(customerIdSchema)
       .mutation(({ ctx, input }) => {
+        const requester = ctx.user?.email || ctx.user?.name || "Admin User";
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || "System",
           action: "compliance.gdpr_erasure",
           resourceType: "customer",
           resourceId: String(input.customerId),
-          details: { anonymized: true, policy: "GDPR Article 17 Right to Erasure" },
+          details: { requestedBy: requester, anonymized: true, policy: "GDPR Article 17 Right to Erasure" },
         });
 
         return {

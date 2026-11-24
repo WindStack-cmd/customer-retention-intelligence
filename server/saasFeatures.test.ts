@@ -119,6 +119,13 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
     });
     expect(rule.id).toBeGreaterThan(0);
 
+    // Toggle rule
+    const toggled = tenantStorage.toggleAlertRule(testWsId, rule.id);
+    expect(toggled?.enabled).toBe(0);
+    const reToggled = tenantStorage.toggleAlertRule(testWsId, rule.id);
+    expect(reToggled?.enabled).toBe(1);
+
+    // Slack alert dispatch
     const alertResult = await dispatchAlert({
       channel: "slack",
       customerName: "Test Account",
@@ -129,6 +136,38 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
       recommendedAction: "Send incentive",
     });
     expect(alertResult.success).toBe(true);
+
+    // HubSpot CRM Task mock dispatch
+    const hubspotResult = await dispatchAlert({
+      channel: "hubspot",
+      customerName: "Acme Corp",
+      sourceCustomerId: "17850",
+      riskProbability: 0.88,
+      revenueAtRisk: 4500,
+      priorityBand: "Urgent",
+      recommendedAction: "Direct CSM call",
+    });
+    expect(hubspotResult.success).toBe(true);
+    expect(hubspotResult.detail).toContain("[CRM Alert MOCK] Created Task for Account 17850");
+
+    // Salesforce CRM Task mock dispatch
+    const salesforceResult = await dispatchAlert({
+      channel: "salesforce",
+      customerName: "Global Tech",
+      sourceCustomerId: "17850",
+      riskProbability: 0.92,
+      revenueAtRisk: 12000,
+      priorityBand: "Urgent",
+      recommendedAction: "Escalate to VP Success",
+    });
+    expect(salesforceResult.success).toBe(true);
+    expect(salesforceResult.detail).toContain("[CRM Alert MOCK] Created Task for Account 17850");
+
+    // Delete rule
+    const deleted = tenantStorage.deleteAlertRule(testWsId, rule.id);
+    expect(deleted).toBe(true);
+    const remaining = tenantStorage.listAlertRules(testWsId);
+    expect(remaining.some(r => r.id === rule.id)).toBe(false);
   });
 
   it("generates cohort retention heatmap, shap waterfall, and journey timeline", () => {
