@@ -211,14 +211,50 @@ function loadInitialData(): TenantCacheData {
 }
 
 import { getDb } from "./db";
-import { workspaces } from "../drizzle/schema";
+import {
+  workspaces,
+  workspaceMembers,
+  workspaceApiKeys,
+  workspaceEvents,
+  scoringRuns,
+  interventions,
+  customerNotes,
+  alertRules,
+  auditLogs,
+} from "../drizzle/schema";
 
 class TenantStorage {
   private data: TenantCacheData;
 
   constructor() {
     this.data = loadInitialData();
-    console.log(`[TenantStorage] Storage initialized. Dev fallback cache active (${CACHE_FILE}).`);
+    if (process.env.NODE_ENV === "production") {
+      if (!process.env.DATABASE_URL) {
+        throw new Error(
+          "[TenantStorage FATAL] DATABASE_URL is not configured in production mode. Refusing to fallback to local JSON file."
+        );
+      }
+      console.log(`[TenantStorage] Running in production mode with DATABASE_URL.`);
+    } else {
+      console.log(`[TenantStorage] Storage initialized. Dev fallback cache active (${CACHE_FILE}).`);
+    }
+  }
+
+  private async persistToDb<T>(table: any, values: any) {
+    try {
+      const db = await getDb();
+      if (db) {
+        await db.insert(table).values(values);
+      }
+    } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        console.error("[TenantStorage DB Write Failure]", err);
+        throw err;
+      } else {
+        // Dev fallback mode: database offline warning
+        console.warn("[TenantStorage Dev Warning] DB write skipped (offline):", (err as any)?.message);
+      }
+    }
   }
 
   public async migrateCacheToDatabase(): Promise<{ success: boolean; importedCount: number }> {
@@ -336,6 +372,14 @@ class TenantStorage {
 
     this.data.members.push(member);
     this.save();
+
+    // Primary store write to database when MySQL is available
+    this.persistToDb(workspaces, workspace);
+    this.persistToDb(workspaceMembers, {
+      workspaceId: id,
+      userId: params.userId,
+      role: "admin",
+    });
 
     return {
       ...workspace,
@@ -577,6 +621,13 @@ class TenantStorage {
 
     this.data.apiKeys.push(key);
     this.save();
+    this.persistToDb(workspaceApiKeys, {
+      workspaceId,
+      name,
+      keyPrefix,
+      keyHash,
+      createdBy: userId,
+    });
     return { apiKey: key, rawSecret };
   }
 
@@ -623,6 +674,17 @@ class TenantStorage {
     };
     this.data.events.push(entry);
     this.save();
+    this.persistToDb(workspaceEvents, {
+      workspaceId: event.workspaceId,
+      eventType: event.eventType,
+      customerId: event.customerId != null ? String(event.customerId) : null,
+      properties: event.properties
+        ? typeof event.properties === "string"
+          ? event.properties
+          : JSON.stringify(event.properties)
+        : null,
+      source: event.source || "api",
+    });
     return entry;
   }
 
@@ -671,6 +733,13 @@ class TenantStorage {
     };
     this.data.scoringRuns.push(run);
     this.save();
+    this.persistToDb(scoringRuns, {
+      workspaceId,
+      status: "running",
+      triggerType,
+      customersScored: 0,
+      revenueAtRisk: "0.00",
+    });
     return run;
   }
 
@@ -742,6 +811,22 @@ class TenantStorage {
     };
     this.data.interventions.push(item);
     this.save();
+    this.persistToDb(interventions, {
+      workspaceId: intervention.workspaceId,
+      customerId: intervention.customerId,
+      sourceCustomerId: intervention.sourceCustomerId,
+      playbookType: intervention.playbookType,
+      templateName: intervention.templateName ?? null,
+      recipientEmail: intervention.recipientEmail ?? null,
+      incentiveCode: intervention.incentiveCode ?? null,
+      incentiveAmount: intervention.incentiveAmount ?? null,
+      status: intervention.status,
+      performedBy: intervention.performedBy,
+      performedByName: intervention.performedByName ?? null,
+      outcome: "pending",
+      revenueSaved: "0.00",
+      details: item.details,
+    });
     return item;
   }
 
@@ -764,6 +849,13 @@ class TenantStorage {
     };
     this.data.notes.push(entry);
     this.save();
+    this.persistToDb(customerNotes, {
+      workspaceId,
+      customerId,
+      authorId,
+      authorName,
+      note,
+    });
     return entry;
   }
 
@@ -811,6 +903,16 @@ class TenantStorage {
     };
     this.data.alertRules.push(newRule);
     this.save();
+    this.persistToDb(alertRules, {
+      workspaceId: rule.workspaceId,
+      name: rule.name,
+      channel: rule.channel,
+      webhookUrl: rule.webhookUrl ?? null,
+      thresholdBand: rule.thresholdBand,
+      minRiskProbability: rule.minRiskProbability,
+      minRevenueAtRisk: rule.minRevenueAtRisk,
+      enabled: rule.enabled ?? 1,
+    });
     return newRule;
   }
 
@@ -893,6 +995,16 @@ class TenantStorage {
     };
     this.data.auditLogs.push(item);
     this.save();
+    this.persistToDb(auditLogs, {
+      workspaceId: log.workspaceId,
+      userId: log.userId ?? null,
+      userName: log.userName ?? null,
+      action: log.action,
+      resourceType: log.resourceType,
+      resourceId: log.resourceId ?? null,
+      details: item.details,
+      ipAddress: log.ipAddress ?? null,
+    });
     return item;
   }
 

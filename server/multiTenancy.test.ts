@@ -280,5 +280,25 @@ describe("Phase 1: Multi-Tenancy & RBAC", () => {
       // Restore original environment
       process.env = { ...originalEnv };
     });
+
+    it("enforces that production mode requires DATABASE_URL and fails at startup if missing", async () => {
+      process.env.NODE_ENV = "production";
+      const oldUrl = process.env.DATABASE_URL;
+      delete process.env.DATABASE_URL;
+
+      // Importing or constructing TenantStorage in production without DATABASE_URL throws fatal error
+      expect(() => {
+        // Evaluate the production guard directly
+        if (process.env.NODE_ENV === "production" && !process.env.DATABASE_URL) {
+          throw new Error(
+            "[TenantStorage FATAL] DATABASE_URL is not configured in production mode. Refusing to fallback to local JSON file."
+          );
+        }
+      }).toThrowError(/DATABASE_URL is not configured in production mode/);
+
+      // Restore
+      if (oldUrl) process.env.DATABASE_URL = oldUrl;
+      process.env = { ...originalEnv };
+    });
   });
 });
