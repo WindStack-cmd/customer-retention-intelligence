@@ -8,6 +8,8 @@ export interface PlaybookEmailPayload {
   discountCode?: string;
   discountPercent?: number;
   workspaceName?: string;
+  subject?: string;
+  body?: string;
 }
 
 export interface WebhookAlertPayload {
@@ -23,28 +25,33 @@ export interface WebhookAlertPayload {
 
 /**
  * Dispatches retention playbook emails.
- * Uses Resend/SendGrid when environment keys are present,
- * otherwise cleanly executes in Mock Mode with structured telemetry.
+ * Uses Resend or SendGrid when environment keys are present,
+ * with graceful fallback to Mock Mode with structured telemetry.
  */
 export async function sendPlaybookEmail(
   payload: PlaybookEmailPayload
 ): Promise<{ status: "sent" | "simulated"; messageId: string; provider: string }> {
-  const apiKey = process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY;
+  const resendKey = process.env.RESEND_API_KEY;
+  const sendgridKey = process.env.SENDGRID_API_KEY;
 
-  if (apiKey && process.env.RESEND_API_KEY) {
+  if (resendKey && !resendKey.includes("placeholder")) {
     try {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${resendKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           from: process.env.PLAYBOOK_FROM_EMAIL || "retention@pulseboard.io",
           to: [payload.to],
-          subject: `Exclusive Retention Offer: ${payload.templateName}`,
-          html: `<p>Hello ${payload.customerName || "Valued Customer"},</p>
-                 <p>We noticed you haven't visited recently. Here is an exclusive offer for your next order: <strong>${payload.discountCode || "SAVE15"}</strong>.</p>`,
+          subject:
+            payload.subject ||
+            `Exclusive Retention Offer: ${payload.templateName}`,
+          html:
+            payload.body ||
+            `<p>Hello ${payload.customerName || "Valued Customer"},</p>
+             <p>We noticed you haven't visited recently. Here is an exclusive offer for your next order: <strong>${payload.discountCode || "SAVE15"}</strong>.</p>`,
         }),
       });
       if (res.ok) {
@@ -56,7 +63,54 @@ export async function sendPlaybookEmail(
         };
       }
     } catch (err) {
-      console.warn("[PlaybookService] Resend API error, falling back to mock:", err);
+      console.warn(
+        "[PlaybookService] Resend API error, checking SendGrid fallback:",
+        err
+      );
+    }
+  }
+
+  // SendGrid API fallback
+  if (sendgridKey && !sendgridKey.includes("placeholder")) {
+    try {
+      const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sendgridKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: payload.to }] }],
+          from: {
+            email: process.env.PLAYBOOK_FROM_EMAIL || "retention@pulseboard.io",
+            name: payload.workspaceName || "Pulseboard Retention",
+          },
+          subject:
+            payload.subject ||
+            `Exclusive Retention Offer: ${payload.templateName}`,
+          content: [
+            {
+              type: "text/html",
+              value:
+                payload.body ||
+                `<p>Hello ${payload.customerName || "Valued Customer"},</p>
+                 <p>We noticed you haven't visited recently. Here is an exclusive offer for your next order: <strong>${payload.discountCode || "SAVE15"}</strong>.</p>`,
+            },
+          ],
+        }),
+      });
+      if (res.ok || res.status === 202) {
+        return {
+          status: "sent",
+          messageId: `sg_${Date.now()}`,
+          provider: "sendgrid",
+        };
+      }
+    } catch (err) {
+      console.warn(
+        "[PlaybookService] SendGrid API error, falling back to mock:",
+        err
+      );
     }
   }
 
@@ -68,7 +122,7 @@ export async function sendPlaybookEmail(
   return {
     status: "simulated",
     messageId: mockId,
-    provider: "mock_resend_sdk",
+    provider: "mock_email_gateway",
   };
 }
 

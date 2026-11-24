@@ -27,6 +27,17 @@ export interface MemberDetail extends WorkspaceMember {
 
 const CACHE_FILE = path.resolve(process.env.TENANT_CACHE_FILE ?? "data/tenants_cache.json");
 
+export interface PlaybookTemplate {
+  id: string;
+  name: string;
+  category: string;
+  subject: string;
+  body: string;
+  discountPercent: number;
+  cooldownDays: number;
+  description?: string;
+}
+
 interface TenantCacheData {
   workspaces: Workspace[];
   members: (WorkspaceMember & { userName?: string; userEmail?: string })[];
@@ -53,6 +64,7 @@ interface TenantCacheData {
       }
     >
   >;
+  playbookTemplates?: Record<string, PlaybookTemplate[]>;
 }
 
 export const ANALYST_DAILY_LIMITS: Record<string, number> = {
@@ -60,6 +72,53 @@ export const ANALYST_DAILY_LIMITS: Record<string, number> = {
   pro: 200,
   enterprise: 999999,
 };
+
+export const DEFAULT_PLAYBOOK_TEMPLATES: PlaybookTemplate[] = [
+  {
+    id: "winback-discount-15",
+    name: "Win-back 15% Incentive Offer",
+    category: "Discount",
+    subject: "Special invitation: 15% off your next purchase",
+    body: "Hi {{customerName}}, we noticed you haven't shopped with us recently. Here is an exclusive discount code: {{discountCode}}.",
+    discountPercent: 15,
+    cooldownDays: 30,
+    description:
+      "Sends customized win-back email with 15% discount voucher for at-risk accounts.",
+  },
+  {
+    id: "executive-checkin",
+    name: "Executive CSM Check-in",
+    category: "Direct Outreach",
+    subject: "Checking in from the executive customer team",
+    body: "Hi {{customerName}}, I wanted to reach out directly to ensure everything is running smoothly and see how we can assist.",
+    discountPercent: 0,
+    cooldownDays: 14,
+    description:
+      "Initiates personalized high-touch outreach from Account Executive or CSM.",
+  },
+  {
+    id: "feature-webinar",
+    name: "Product Mastery & Feature Activation",
+    category: "Education",
+    subject: "Invitation: Exclusive Customer Retention Masterclass",
+    body: "Hi {{customerName}}, discover new tools and workflows in our live customer success session this Thursday.",
+    discountPercent: 0,
+    cooldownDays: 60,
+    description:
+      "Invites accounts to private webinar focusing on unadopted high-retention features.",
+  },
+  {
+    id: "vip-loyalty-upgrade",
+    name: "VIP Tier Upgrade with Free Shipping",
+    category: "Loyalty",
+    subject: "Complimentary VIP status upgrade for your account",
+    body: "Hi {{customerName}}, you've been upgraded to our VIP tier with free priority shipping and member rewards.",
+    discountPercent: 20,
+    cooldownDays: 45,
+    description:
+      "Comp-upgrades customer to VIP status to re-engage historical high-value buyers.",
+  },
+];
 
 function loadInitialData(): TenantCacheData {
   const defaultWs: Workspace = {
@@ -995,6 +1054,35 @@ class TenantStorage {
 
     this.setTenantCustomers(workspaceId, samples);
     return samples.length;
+  }
+
+  listPlaybookTemplates(workspaceId: string): PlaybookTemplate[] {
+    const custom =
+      this.data.playbookTemplates && this.data.playbookTemplates[workspaceId];
+    if (custom && custom.length > 0) return custom;
+    return DEFAULT_PLAYBOOK_TEMPLATES;
+  }
+
+  savePlaybookTemplate(
+    workspaceId: string,
+    template: PlaybookTemplate
+  ): PlaybookTemplate {
+    if (!this.data.playbookTemplates) this.data.playbookTemplates = {};
+    if (!this.data.playbookTemplates[workspaceId]) {
+      this.data.playbookTemplates[workspaceId] = [
+        ...DEFAULT_PLAYBOOK_TEMPLATES,
+      ];
+    }
+    const idx = this.data.playbookTemplates[workspaceId].findIndex(
+      t => t.id === template.id
+    );
+    if (idx >= 0) {
+      this.data.playbookTemplates[workspaceId][idx] = template;
+    } else {
+      this.data.playbookTemplates[workspaceId].push(template);
+    }
+    this.save();
+    return template;
   }
 }
 

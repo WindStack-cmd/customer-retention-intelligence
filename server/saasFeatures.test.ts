@@ -292,4 +292,57 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
     const verifiedNew = tenantStorage.verifyApiKey(rotated.rawSecret);
     expect(verifiedNew?.id).toBe(rotated.apiKey.id);
   });
+
+  it("customizes playbook templates and stores discount codes on intervention", async () => {
+    const ws = tenantStorage.createWorkspace({
+      name: "Playbook Customization WS",
+      userId: 557,
+    });
+
+    const templates = tenantStorage.listPlaybookTemplates(ws.id);
+    expect(templates.length).toBeGreaterThanOrEqual(4);
+
+    // Customize template
+    const customTemplate = {
+      ...templates[0],
+      subject: "VIP Custom 25% Off Win-back",
+      body: "Hello {{customerName}}, enjoy 25% off with {{discountCode}}",
+      discountPercent: 25,
+      cooldownDays: 21,
+    };
+    tenantStorage.savePlaybookTemplate(ws.id, customTemplate);
+
+    const savedList = tenantStorage.listPlaybookTemplates(ws.id);
+    const updated = savedList.find(t => t.id === customTemplate.id);
+    expect(updated?.subject).toBe("VIP Custom 25% Off Win-back");
+    expect(updated?.discountPercent).toBe(25);
+
+    // Send email using SendGrid / mock fallback
+    const emailResult = await sendPlaybookEmail({
+      to: "client@test.com",
+      templateName: updated!.name,
+      customerName: "Acme Buyer",
+      discountCode: "SAVE25",
+      subject: updated!.subject,
+      body: updated!.body,
+    });
+    expect(emailResult.status).toBeDefined();
+
+    // Record intervention with verified discount code & amount
+    const intervention = tenantStorage.recordIntervention({
+      workspaceId: ws.id,
+      customerId: 17850,
+      sourceCustomerId: "CUST17850",
+      playbookType: updated!.name,
+      templateName: updated!.name,
+      recipientEmail: "client@test.com",
+      incentiveCode: "SAVE25",
+      incentiveAmount: "25",
+      status: "delivered",
+      performedBy: 557,
+    });
+
+    expect(intervention.incentiveCode).toBe("SAVE25");
+    expect(intervention.incentiveAmount).toBe("25");
+  });
 });

@@ -9,6 +9,8 @@ import {
   Percent,
   Play,
   RotateCw,
+  Edit3,
+  X,
 } from "lucide-react";
 
 export function RetentionROISection() {
@@ -18,6 +20,22 @@ export function RetentionROISection() {
   const { data: alerts } = trpc.actions.alerts.useQuery();
 
   const [testAlertMessage, setTestAlertMessage] = useState<string | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState<{
+    id: string;
+    name: string;
+    category: string;
+    subject: string;
+    body: string;
+    discountPercent: number;
+    cooldownDays: number;
+  } | null>(null);
+
+  const saveTemplateMutation = trpc.actions.savePlaybookTemplate.useMutation({
+    onSuccess: () => {
+      utils.actions.playbooks.invalidate();
+      setEditingTemplate(null);
+    },
+  });
 
   const testAlertMutation = trpc.actions.testAlert.useMutation({
     onSuccess: (res) => {
@@ -114,11 +132,19 @@ export function RetentionROISection() {
                     {pb.category}
                   </span>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">{pb.description}</p>
+                <p className="mt-2 text-xs text-muted-foreground">{pb.description || pb.subject}</p>
               </div>
               <div className="mt-4 flex items-center justify-between pt-3 border-t border-border text-[11px]">
-                <span className="text-subtle-foreground">Incentive: {pb.defaultDiscount}</span>
-                <span className="text-primary font-medium">Auto-trigger ready</span>
+                <span className="text-subtle-foreground">
+                  Incentive: {pb.discountPercent ? `${pb.discountPercent}% off` : "None"} · {pb.cooldownDays}d cooldown
+                </span>
+                <button
+                  onClick={() => setEditingTemplate(pb)}
+                  className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                >
+                  <Edit3 className="h-3 w-3" />
+                  <span>Customize</span>
+                </button>
               </div>
             </div>
           ))}
@@ -182,6 +208,124 @@ export function RetentionROISection() {
           ))}
         </div>
       </div>
+
+      {editingTemplate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display text-base font-semibold text-foreground">
+                Customize Playbook: {editingTemplate.name}
+              </h3>
+              <button
+                onClick={() => setEditingTemplate(null)}
+                className="rounded-lg p-1 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveTemplateMutation.mutate(editingTemplate);
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div>
+                <label className="block font-medium text-muted-foreground mb-1">
+                  Subject Line
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editingTemplate.subject}
+                  onChange={(e) =>
+                    setEditingTemplate({
+                      ...editingTemplate,
+                      subject: e.target.value,
+                    })
+                  }
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-foreground focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-muted-foreground mb-1">
+                  Email Body Template (supports {"{{customerName}}"} and {"{{discountCode}}"})
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={editingTemplate.body}
+                  onChange={(e) =>
+                    setEditingTemplate({
+                      ...editingTemplate,
+                      body: e.target.value,
+                    })
+                  }
+                  className="w-full rounded-xl border border-border bg-background p-3 text-foreground focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-muted-foreground mb-1">
+                    Discount Percentage (%)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={editingTemplate.discountPercent}
+                    onChange={(e) =>
+                      setEditingTemplate({
+                        ...editingTemplate,
+                        discountPercent: Number(e.target.value),
+                      })
+                    }
+                    className="w-full rounded-xl border border-border bg-background px-3 py-2 text-foreground focus:border-primary focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-muted-foreground mb-1">
+                    Re-engagement Cooldown (Days)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={editingTemplate.cooldownDays}
+                    onChange={(e) =>
+                      setEditingTemplate({
+                        ...editingTemplate,
+                        cooldownDays: Number(e.target.value),
+                      })
+                    }
+                    className="w-full rounded-xl border border-border bg-background px-3 py-2 text-foreground focus:border-primary focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setEditingTemplate(null)}
+                  className="rounded-lg border border-border px-3.5 py-1.5 text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saveTemplateMutation.isPending}
+                  className="rounded-lg bg-primary px-4 py-1.5 font-semibold text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
+                >
+                  {saveTemplateMutation.isPending ? "Saving..." : "Save Template"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -494,36 +494,37 @@ export const appRouter = router({
 
   // Phase 3: Closed-Loop Retention Actions, Playbooks, Alerts, Notes
   actions: router({
-    playbooks: workspaceProcedure.query(() => [
-      {
-        id: "winback-discount-15",
-        name: "Win-back 15% Incentive Offer",
-        category: "Discount",
-        defaultDiscount: "15%",
-        description: "Sends customized win-back email with 15% discount voucher for at-risk accounts.",
-      },
-      {
-        id: "executive-checkin",
-        name: "Executive CSM Check-in",
-        category: "Direct Outreach",
-        defaultDiscount: "None",
-        description: "Initiates personalized high-touch outreach from Account Executive or CSM.",
-      },
-      {
-        id: "feature-webinar",
-        name: "Product Mastery & Feature Activation",
-        category: "Education",
-        defaultDiscount: "None",
-        description: "Invites accounts to private webinar focusing on unadopted high-retention features.",
-      },
-      {
-        id: "vip-loyalty-upgrade",
-        name: "VIP Tier Upgrade with Free Shipping",
-        category: "Loyalty",
-        defaultDiscount: "VIP Tier",
-        description: "Comp-upgrades customer to VIP status to re-engage historical high-value buyers.",
-      },
-    ]),
+    playbooks: workspaceProcedure.query(({ ctx }) => {
+      return tenantStorage.listPlaybookTemplates(ctx.workspace.id);
+    }),
+
+    savePlaybookTemplate: adminProcedure
+      .input(
+        z.object({
+          id: z.string(),
+          name: z.string().min(2),
+          category: z.string(),
+          subject: z.string().min(2),
+          body: z.string().min(2),
+          discountPercent: z.number().min(0).max(100),
+          cooldownDays: z.number().min(1).max(365),
+        })
+      )
+      .mutation(({ ctx, input }) => {
+        const saved = tenantStorage.savePlaybookTemplate(
+          ctx.workspace.id,
+          input
+        );
+        tenantStorage.logAudit({
+          workspaceId: ctx.workspace.id,
+          userId: ctx.user?.id,
+          action: "playbook.template_updated",
+          resourceType: "playbook",
+          resourceId: input.id,
+          details: { name: input.name, subject: input.subject },
+        });
+        return saved;
+      }),
 
     executePlaybook: csmProcedure
       .input(
@@ -539,29 +540,57 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        const templates = tenantStorage.listPlaybookTemplates(ctx.workspace.id);
+        const template = templates.find(
+          t => t.id === input.playbookType || t.name === input.playbookType
+        );
+
+        const discountCode =
+          input.incentiveCode ||
+          (template?.discountPercent
+            ? `SAVE${template.discountPercent}`
+            : undefined);
+        const discountAmount =
+          input.incentiveAmount ||
+          (template?.discountPercent ? String(template.discountPercent) : null);
+
         // Dispatch email via Resend/SendGrid or Mock
         const emailResult = await sendPlaybookEmail({
-          to: input.recipientEmail || `customer-${input.sourceCustomerId}@client-domain.com`,
-          templateName: input.templateName || input.playbookType,
+          to:
+            input.recipientEmail ||
+            `customer-${input.sourceCustomerId}@client-domain.com`,
+          templateName:
+            template?.name || input.templateName || input.playbookType,
           customerName: `Customer #${input.sourceCustomerId}`,
-          discountCode: input.incentiveCode,
+          discountCode,
           workspaceName: ctx.workspace.name,
+          subject: template?.subject,
+          body: template?.body,
         });
 
-        // Save intervention record
+        // Save intervention record with explicit discountCode and discountAmount
         const intervention = tenantStorage.recordIntervention({
           workspaceId: ctx.workspace.id,
           customerId: input.customerId,
           sourceCustomerId: input.sourceCustomerId,
           playbookType: input.playbookType,
-          templateName: input.templateName ?? null,
-          recipientEmail: input.recipientEmail ?? null,
-          incentiveCode: input.incentiveCode ?? null,
-          incentiveAmount: input.incentiveAmount ?? null,
+          templateName:
+            template?.name || input.templateName || input.playbookType,
+          recipientEmail:
+            input.recipientEmail ||
+            `customer-${input.sourceCustomerId}@client-domain.com`,
+          incentiveCode: discountCode ?? null,
+          incentiveAmount: discountAmount ?? null,
           status: emailResult.status === "sent" ? "sent" : "delivered",
           performedBy: ctx.user?.id || 1,
           performedByName: ctx.user?.name || "CSM Representative",
-          details: { ...input.details, provider: emailResult.provider },
+          details: {
+            ...input.details,
+            provider: emailResult.provider,
+            subject: template?.subject,
+            discountCode,
+            discountAmount,
+          },
         });
 
         tenantStorage.logAudit({
@@ -574,6 +603,8 @@ export const appRouter = router({
             customerId: input.customerId,
             playbookType: input.playbookType,
             recipient: input.recipientEmail,
+            incentiveCode: discountCode,
+            incentiveAmount: discountAmount,
           },
         });
 
