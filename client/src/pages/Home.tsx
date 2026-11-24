@@ -101,13 +101,8 @@ function LoadingState({ label }: { label: string }) {
 
 const navItems = [
   { id: "overview", label: "Overview", icon: Activity },
-  { id: "recommendations", label: "Actions", icon: Sparkles },
   { id: "customers", label: "Customers", icon: UsersRound },
-  { id: "roi", label: "Retention ROI", icon: TrendingUp },
-  { id: "cohorts", label: "Cohorts", icon: Grid },
-  { id: "integrations", label: "Integrations", icon: Zap },
-  { id: "team", label: "Team", icon: ShieldCheck },
-  { id: "billing", label: "Billing & Security", icon: CreditCard },
+  { id: "recommendations", label: "Actions", icon: Sparkles },
   { id: "metadata", label: "Data & model", icon: Database },
 ];
 

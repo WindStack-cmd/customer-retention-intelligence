@@ -125,12 +125,19 @@ export function RetentionROISection() {
           </div>
 
           <div className="rounded-xl border border-border bg-background p-4">
-            <p className="text-xs text-muted-foreground">Contacted Cohort Retention</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Contacted Cohort Retention</p>
+              {roi?.sampleData && (
+                <span className="rounded bg-status-medium-bg border border-status-medium-border px-1.5 py-0.5 text-[9px] font-bold text-status-medium-text uppercase">
+                  Sample data
+                </span>
+              )}
+            </div>
             <p className="font-display text-2xl font-bold text-status-protective-text mt-1">
               {roi?.contactedRetentionRate != null ? `${roi.contactedRetentionRate}%` : "—"}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1">
-              vs {roi?.nonContactedRetentionRate ?? 32.1}% baseline benchmark
+              vs {roi?.nonContactedRetentionRate ?? 32.1}% baseline benchmark {roi?.sampleData ? "(Sample data)" : ""}
             </p>
           </div>
 
