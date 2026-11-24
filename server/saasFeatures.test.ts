@@ -236,4 +236,35 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
     const count = tenantStorage.getTenantCustomerCount(starterWs.id);
     expect(count).toBeLessThanOrEqual(starterWs.customerLimit);
   });
+
+  it("configures Stripe and Shopify connectors and populates sample customers on sync", () => {
+    const ws = tenantStorage.createWorkspace({
+      name: "Connector Test WS",
+      userId: 555,
+    });
+
+    // Initial customer count is 0
+    expect(tenantStorage.getTenantCustomerCount(ws.id)).toBe(0);
+
+    // Configure Stripe connector
+    const config = tenantStorage.updateIntegrationConfig(ws.id, "stripe", {
+      connected: true,
+      mode: "mock",
+      apiKey: "rk_test_sample_stripe_key_12345",
+      webhookUrl: "https://example.com/api/webhooks/stripe",
+    });
+    expect(config.connected).toBe(true);
+    expect(config.mode).toBe("mock");
+    expect(config.apiKeyMasked).toContain("••••");
+
+    // Populate sample customers on sync
+    const populatedCount = tenantStorage.populateSampleCustomers(ws.id);
+    expect(populatedCount).toBe(15);
+    expect(tenantStorage.getTenantCustomerCount(ws.id)).toBe(15);
+
+    const customers = tenantStorage.getTenantCustomers(ws.id);
+    expect(customers.length).toBe(15);
+    expect(customers[0].priorityBand).toBeDefined();
+    expect(customers[0].calibratedChurnProbability).toBeGreaterThan(0);
+  });
 });

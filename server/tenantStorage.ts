@@ -40,6 +40,19 @@ interface TenantCacheData {
   auditLogs: AuditLog[];
   tenantCustomers: Record<string, any[]>;
   analystDailyUsage?: Record<string, number>;
+  integrationsConfig?: Record<
+    string,
+    Record<
+      string,
+      {
+        connected: boolean;
+        mode: "mock" | "live";
+        apiKeyMasked?: string;
+        webhookUrl?: string;
+        lastSyncAt?: string;
+      }
+    >
+  >;
 }
 
 export const ANALYST_DAILY_LIMITS: Record<string, number> = {
@@ -102,6 +115,7 @@ function loadInitialData(): TenantCacheData {
       if (!parsed.alertRules) parsed.alertRules = defaultAlertRules;
       if (!parsed.tenantCustomers) parsed.tenantCustomers = {};
       if (!parsed.analystDailyUsage) parsed.analystDailyUsage = {};
+      if (!parsed.integrationsConfig) parsed.integrationsConfig = {};
       return parsed;
     } catch {
       // Corrupt cache file, start fresh
@@ -121,6 +135,7 @@ function loadInitialData(): TenantCacheData {
     auditLogs: [],
     tenantCustomers: {},
     analystDailyUsage: {},
+    integrationsConfig: {},
   };
 }
 
@@ -832,6 +847,154 @@ class TenantStorage {
     this.data.analystDailyUsage[key] = current + 1;
     this.save();
     return { allowed: true, used: current + 1, limit, plan };
+  }
+
+  getIntegrationConfig(workspaceId: string): Record<
+    string,
+    {
+      connected: boolean;
+      mode: "mock" | "live";
+      apiKeyMasked?: string;
+      lastSyncAt?: string;
+    }
+  > {
+    const wsConfig =
+      (this.data.integrationsConfig &&
+        this.data.integrationsConfig[workspaceId]) ||
+      {};
+    const hasStripeEnv = Boolean(
+      process.env.STRIPE_SECRET_KEY &&
+        !process.env.STRIPE_SECRET_KEY.includes("placeholder")
+    );
+    const hasShopifyEnv = Boolean(process.env.SHOPIFY_API_KEY);
+
+    return {
+      stripe: wsConfig.stripe || {
+        connected: true,
+        mode: hasStripeEnv ? "live" : "mock",
+        lastSyncAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
+      },
+      shopify: wsConfig.shopify || {
+        connected: true,
+        mode: hasShopifyEnv ? "live" : "mock",
+        lastSyncAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
+      },
+    };
+  }
+
+  updateIntegrationConfig(
+    workspaceId: string,
+    source: "stripe" | "shopify",
+    config: {
+      connected: boolean;
+      mode?: "mock" | "live";
+      apiKey?: string;
+      webhookUrl?: string;
+    }
+  ) {
+    if (!this.data.integrationsConfig) this.data.integrationsConfig = {};
+    if (!this.data.integrationsConfig[workspaceId])
+      this.data.integrationsConfig[workspaceId] = {};
+
+    const existing =
+      this.data.integrationsConfig[workspaceId][source] || {};
+    const apiKeyMasked = config.apiKey
+      ? `${config.apiKey.slice(0, 6)}••••••••${config.apiKey.slice(-4)}`
+      : existing.apiKeyMasked;
+
+    this.data.integrationsConfig[workspaceId][source] = {
+      connected: config.connected,
+      mode:
+        config.mode ||
+        (config.apiKey?.startsWith("live_") || config.apiKey?.startsWith("sk_live")
+          ? "live"
+          : "mock"),
+      apiKeyMasked,
+      webhookUrl: config.webhookUrl || existing.webhookUrl,
+      lastSyncAt: existing.lastSyncAt || new Date().toISOString(),
+    };
+    this.save();
+    return this.data.integrationsConfig[workspaceId][source];
+  }
+
+  updateIntegrationSyncTime(workspaceId: string, source: "stripe" | "shopify") {
+    if (!this.data.integrationsConfig) this.data.integrationsConfig = {};
+    if (!this.data.integrationsConfig[workspaceId])
+      this.data.integrationsConfig[workspaceId] = {};
+    const existing = this.data.integrationsConfig[workspaceId][source] || {
+      connected: true,
+      mode: "mock",
+    };
+    existing.lastSyncAt = new Date().toISOString();
+    this.data.integrationsConfig[workspaceId][source] = existing;
+    this.save();
+  }
+
+  populateSampleCustomers(workspaceId: string): number {
+    const existing = this.getTenantCustomers(workspaceId);
+    if (existing.length > 0) return existing.length;
+
+    const sampleBands = ["Urgent", "High", "Monitor"] as const;
+    const countries = [
+      "United Kingdom",
+      "Germany",
+      "France",
+      "United States",
+      "Australia",
+      "Canada",
+    ];
+    const actions = [
+      "VIP Concierge Check-in",
+      "Executive outreach & contract discount",
+      "Win-back 15% Incentive Offer",
+      "Proactive Support Check-in",
+      "Feature adoption walkthrough",
+    ];
+
+    const samples = Array.from({ length: 15 }, (_, idx) => {
+      const id = 90001 + idx;
+      const band = sampleBands[idx % sampleBands.length];
+      const risk =
+        band === "Urgent"
+          ? 0.75 + (idx % 20) * 0.01
+          : band === "High"
+            ? 0.55 + (idx % 15) * 0.01
+            : 0.25 + (idx % 10) * 0.01;
+      const clv = 1500 + idx * 450;
+      const revAtRisk = Number((clv * risk).toFixed(2));
+      const score = Math.round(risk * 100);
+
+      return {
+        customerId: id,
+        sourceCustomerId: `EXT-${10000 + idx}`,
+        country: countries[idx % countries.length],
+        firstActivityAt: new Date(
+          Date.now() - (180 + idx * 10) * 86400000
+        ).toISOString(),
+        lastActivityAt: new Date(
+          Date.now() - (15 + idx * 2) * 86400000
+        ).toISOString(),
+        priorityScore: score,
+        priorityBand: band,
+        recommendedAction: actions[idx % actions.length],
+        rationale: `Customer shows ${Math.round(risk * 100)}% churn risk due to order slowdown and return activity.`,
+        supportingSignals: {
+          daysSinceLastPurchase: 25 + idx * 3,
+          revenueAtRisk: revAtRisk,
+          returnRate: 0.12,
+        },
+        benefitEvidence:
+          "High value customer with historically strong repurchase rate.",
+        calibratedChurnProbability: Number(risk.toFixed(4)),
+        behavioralClv: clv,
+        revenueAtRisk: revAtRisk,
+        expectedFutureValue: Math.round(clv * (1 - risk)),
+        cutoffAt: new Date().toISOString(),
+      };
+    });
+
+    this.setTenantCustomers(workspaceId, samples);
+    return samples.length;
   }
 }
 

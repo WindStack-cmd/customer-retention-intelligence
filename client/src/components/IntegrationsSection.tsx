@@ -11,6 +11,8 @@ import {
   Copy,
   Radio,
   Clock,
+  Settings,
+  X,
 } from "lucide-react";
 
 export function IntegrationsSection() {
@@ -25,6 +27,20 @@ export function IntegrationsSection() {
   const [createdKeySecret, setCreatedKeySecret] = useState<string | null>(null);
   const [copiedSecret, setCopiedSecret] = useState(false);
   const [scoringMessage, setScoringMessage] = useState<string | null>(null);
+  const [connectorModal, setConnectorModal] = useState<{
+    source: "stripe" | "shopify";
+    mode: "mock" | "live";
+    apiKey: string;
+    webhookUrl: string;
+  } | null>(null);
+
+  const configureConnectorMutation =
+    trpc.integrations.configureConnector.useMutation({
+      onSuccess: () => {
+        utils.integrations.status.invalidate();
+        setConnectorModal(null);
+      },
+    });
 
   const createKeyMutation = trpc.integrations.createApiKey.useMutation({
     onSuccess: (data) => {
@@ -104,7 +120,7 @@ export function IntegrationsSection() {
               <span className="font-display text-sm font-semibold text-foreground">Stripe Billing</span>
               <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] uppercase font-medium text-primary">
                 <Radio className="h-2 w-2 text-primary" />
-                {status?.stripe.mode || "MOCK MODE"}
+                {status?.stripe.connected ? `Connected (${status.stripe.mode === "live" ? "Live" : "Mock mode"})` : "Not connected"}
               </span>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
@@ -112,14 +128,32 @@ export function IntegrationsSection() {
             </p>
           </div>
           <div className="mt-4 flex items-center justify-between pt-3 border-t border-border">
-            <span className="text-[10px] text-subtle-foreground">Synced 2d ago</span>
-            <button
-              onClick={() => triggerSyncMutation.mutate({ source: "stripe" })}
-              disabled={triggerSyncMutation.isPending}
-              className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
-            >
-              Sync Now
-            </button>
+            <span className="text-[10px] text-subtle-foreground">
+              {status?.stripe.lastSyncAt ? `Synced ${new Date(status.stripe.lastSyncAt).toLocaleDateString()}` : "Synced recently"}
+            </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() =>
+                  setConnectorModal({
+                    source: "stripe",
+                    mode: status?.stripe.mode || "mock",
+                    apiKey: "",
+                    webhookUrl: "",
+                  })
+                }
+                className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                <Settings className="h-3 w-3" />
+                <span>Configure</span>
+              </button>
+              <button
+                onClick={() => triggerSyncMutation.mutate({ source: "stripe" })}
+                disabled={triggerSyncMutation.isPending}
+                className="text-xs font-semibold text-primary hover:underline disabled:opacity-50"
+              >
+                Sync Now
+              </button>
+            </div>
           </div>
         </div>
 
@@ -130,7 +164,7 @@ export function IntegrationsSection() {
               <span className="font-display text-sm font-semibold text-foreground">Shopify Commerce</span>
               <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] uppercase font-medium text-primary">
                 <Radio className="h-2 w-2 text-primary" />
-                {status?.shopify.mode || "MOCK MODE"}
+                {status?.shopify.connected ? `Connected (${status.shopify.mode === "live" ? "Live" : "Mock mode"})` : "Not connected"}
               </span>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
@@ -138,14 +172,32 @@ export function IntegrationsSection() {
             </p>
           </div>
           <div className="mt-4 flex items-center justify-between pt-3 border-t border-border">
-            <span className="text-[10px] text-subtle-foreground">Synced 1d ago</span>
-            <button
-              onClick={() => triggerSyncMutation.mutate({ source: "shopify" })}
-              disabled={triggerSyncMutation.isPending}
-              className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
-            >
-              Sync Now
-            </button>
+            <span className="text-[10px] text-subtle-foreground">
+              {status?.shopify.lastSyncAt ? `Synced ${new Date(status.shopify.lastSyncAt).toLocaleDateString()}` : "Synced recently"}
+            </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() =>
+                  setConnectorModal({
+                    source: "shopify",
+                    mode: status?.shopify.mode || "mock",
+                    apiKey: "",
+                    webhookUrl: "",
+                  })
+                }
+                className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                <Settings className="h-3 w-3" />
+                <span>Configure</span>
+              </button>
+              <button
+                onClick={() => triggerSyncMutation.mutate({ source: "shopify" })}
+                disabled={triggerSyncMutation.isPending}
+                className="text-xs font-semibold text-primary hover:underline disabled:opacity-50"
+              >
+                Sync Now
+              </button>
+            </div>
           </div>
         </div>
 
@@ -301,6 +353,113 @@ export function IntegrationsSection() {
           )}
         </div>
       </div>
+
+      {connectorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display text-base font-semibold text-foreground">
+                Configure {connectorModal.source === "stripe" ? "Stripe Billing" : "Shopify Commerce"}
+              </h3>
+              <button
+                onClick={() => setConnectorModal(null)}
+                className="rounded-lg p-1 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                configureConnectorMutation.mutate({
+                  source: connectorModal.source,
+                  connected: true,
+                  mode: connectorModal.mode,
+                  apiKey: connectorModal.apiKey || undefined,
+                  webhookUrl: connectorModal.webhookUrl || undefined,
+                });
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  Integration Mode
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConnectorModal({ ...connectorModal, mode: "mock" })}
+                    className={`rounded-xl border p-2.5 text-xs text-left transition ${
+                      connectorModal.mode === "mock"
+                        ? "border-primary bg-primary/10 text-primary font-medium"
+                        : "border-border bg-background text-muted-foreground"
+                    }`}
+                  >
+                    <p className="font-semibold">Mock Mode</p>
+                    <p className="text-[10px] mt-0.5 opacity-80">Simulated test events</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConnectorModal({ ...connectorModal, mode: "live" })}
+                    className={`rounded-xl border p-2.5 text-xs text-left transition ${
+                      connectorModal.mode === "live"
+                        ? "border-primary bg-primary/10 text-primary font-medium"
+                        : "border-border bg-background text-muted-foreground"
+                    }`}
+                  >
+                    <p className="font-semibold">Live Mode</p>
+                    <p className="text-[10px] mt-0.5 opacity-80">Real API credentials</p>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  {connectorModal.source === "stripe" ? "Stripe Restricted Secret Key" : "Shopify Admin API Token"}
+                </label>
+                <input
+                  type="password"
+                  placeholder={connectorModal.source === "stripe" ? "rk_live_... or leave empty for mock" : "shpat_... or leave empty for mock"}
+                  value={connectorModal.apiKey}
+                  onChange={(e) => setConnectorModal({ ...connectorModal, apiKey: e.target.value })}
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-xs text-foreground placeholder:text-subtle-foreground focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  Webhook Endpoint URL
+                </label>
+                <input
+                  type="text"
+                  placeholder="https://your-domain.com/api/webhooks/..."
+                  value={connectorModal.webhookUrl}
+                  onChange={(e) => setConnectorModal({ ...connectorModal, webhookUrl: e.target.value })}
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-xs text-foreground placeholder:text-subtle-foreground focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setConnectorModal(null)}
+                  className="rounded-lg border border-border px-3.5 py-1.5 text-xs text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={configureConnectorMutation.isPending}
+                  className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
+                >
+                  {configureConnectorMutation.isPending ? "Connecting..." : "Save Connection"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

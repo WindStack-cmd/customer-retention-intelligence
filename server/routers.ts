@@ -298,25 +298,43 @@ export const appRouter = router({
   // Phase 2: Ingestion, Connectors, & Scoring Runner
   integrations: router({
     status: workspaceProcedure.query(({ ctx }) => {
-      const hasStripe = Boolean(process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_SECRET_KEY.includes("placeholder"));
-      const hasShopify = Boolean(process.env.SHOPIFY_API_KEY);
+      const config = tenantStorage.getIntegrationConfig(ctx.workspace.id);
       return {
-        stripe: {
-          connected: hasStripe,
-          mode: hasStripe ? "live" : "mock",
-          lastSync: "2026-11-20T12:00:00Z",
-        },
-        shopify: {
-          connected: hasShopify,
-          mode: hasShopify ? "live" : "mock",
-          lastSync: "2026-11-21T08:30:00Z",
-        },
+        stripe: config.stripe,
+        shopify: config.shopify,
         inboundApi: {
           endpoint: "/api/v1/events",
           status: "active",
         },
       };
     }),
+
+    configureConnector: adminProcedure
+      .input(
+        z.object({
+          source: z.enum(["stripe", "shopify"]),
+          connected: z.boolean(),
+          mode: z.enum(["mock", "live"]).optional(),
+          apiKey: z.string().optional(),
+          webhookUrl: z.string().optional(),
+        })
+      )
+      .mutation(({ ctx, input }) => {
+        const res = tenantStorage.updateIntegrationConfig(
+          ctx.workspace.id,
+          input.source,
+          input
+        );
+        tenantStorage.logAudit({
+          workspaceId: ctx.workspace.id,
+          userId: ctx.user?.id,
+          action: `integration.${input.source}_configured`,
+          resourceType: "integration",
+          resourceId: input.source,
+          details: { mode: res.mode, connected: res.connected },
+        });
+        return res;
+      }),
 
     apiKeys: adminProcedure.query(({ ctx }) => {
       return tenantStorage.listApiKeys(ctx.workspace.id);
@@ -391,14 +409,30 @@ export const appRouter = router({
           });
         }
 
-        // Mock sync ingestion
+        // If workspace is empty, populate sample customers and score them
+        let recordsProcessed = 142;
+        let ordersUpdated = 87;
+        const currentCustomers = tenantStorage.getTenantCustomerCount(
+          ctx.workspace.id
+        );
+        if (currentCustomers === 0 && ctx.workspace.id !== "ws_default") {
+          const populated = tenantStorage.populateSampleCustomers(
+            ctx.workspace.id
+          );
+          recordsProcessed = populated;
+          ordersUpdated = populated * 3;
+        }
+
+        tenantStorage.updateIntegrationSyncTime(ctx.workspace.id, input.source);
+
+        // Record sync event
         tenantStorage.recordEvent({
           workspaceId: ctx.workspace.id,
           eventType: `${input.source}.sync_completed`,
           source: input.source,
           properties: {
-            recordsProcessed: 142,
-            ordersUpdated: 87,
+            recordsProcessed,
+            ordersUpdated,
             status: "synced_successfully",
           },
           timestamp: new Date(),
@@ -410,14 +444,14 @@ export const appRouter = router({
           action: `integration.${input.source}_sync`,
           resourceType: "integration",
           resourceId: input.source,
-          details: { mock: true, recordsProcessed: 142 },
+          details: { mock: true, recordsProcessed },
         });
 
         return {
           success: true,
           source: input.source,
-          recordsProcessed: 142,
-          message: `${input.source.toUpperCase()} data synchronized successfully.`,
+          recordsProcessed,
+          message: `${input.source.toUpperCase()} data synchronized successfully (${recordsProcessed} records processed).`,
         };
       }),
   }),
