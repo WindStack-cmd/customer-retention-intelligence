@@ -15,13 +15,13 @@ export function CohortHeatmap() {
   const cohorts = data?.cohorts || [];
   const averageRetention = data?.averageRetention || [];
 
-  // Derives background tint using Sand #D8CBB3 with proportional opacity
+  // Derives background tint using semantic token var(--foreground) with proportional opacity
   const getCellBg = (rate: number) => {
-    if (rate >= 90) return "rgba(216, 203, 179, 0.35)";
-    if (rate >= 35) return "rgba(216, 203, 179, 0.22)";
-    if (rate >= 25) return "rgba(216, 203, 179, 0.14)";
-    if (rate >= 15) return "rgba(216, 203, 179, 0.08)";
-    return "rgba(216, 203, 179, 0.03)";
+    if (rate >= 90) return "color-mix(in srgb, var(--foreground) 35%, transparent)";
+    if (rate >= 35) return "color-mix(in srgb, var(--foreground) 22%, transparent)";
+    if (rate >= 25) return "color-mix(in srgb, var(--foreground) 14%, transparent)";
+    if (rate >= 15) return "color-mix(in srgb, var(--foreground) 8%, transparent)";
+    return "color-mix(in srgb, var(--foreground) 3%, transparent)";
   };
 
   return (
