@@ -11,6 +11,9 @@ if (!fs.existsSync(tempDir)) {
 const testCachePath = path.resolve(tempDir, `test_cache_${process.pid}.json`);
 process.env.TENANT_CACHE_FILE = testCachePath;
 process.env.SKIP_DB_CONNECTION = "true";
+process.env.ORDERS_CSV_PATH =
+  process.env.ORDERS_CSV_PATH ??
+  path.resolve("server/fixtures/orders_sample.csv");
 
 let tenantStorage: typeof import("./tenantStorage").tenantStorage;
 
