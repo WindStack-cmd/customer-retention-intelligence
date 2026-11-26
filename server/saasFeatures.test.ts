@@ -177,6 +177,23 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
     expect(heatmap.cohorts[0].retentionRates.length).toBe(13); // Full M0 through M12
     expect(heatmap.cohorts[0].retentionRates[0]).toBe(100);
     expect(heatmap.averageRetention.length).toBe(13);
+    expect(heatmap.isSampleData).toBe(false);
+    expect(heatmap.isMissing).toBe(false);
+
+    // Per-workspace isolation: new workspace with no transactions returns empty state
+    const emptyWsHeatmap = getCohortRetentionHeatmap("ws_nonexistent_empty");
+    expect(emptyWsHeatmap.cohorts.length).toBe(0);
+    expect(emptyWsHeatmap.isSampleData).toBe(true);
+    expect(emptyWsHeatmap.emptyMessage).toContain("No transaction records");
+
+    // Missing orders file handled gracefully without crashing
+    const originalRecoveryDir = process.env.RECOVERY_DIR;
+    process.env.RECOVERY_DIR = "data/non_existent_recovery_dir";
+    const missingFileHeatmap = getCohortRetentionHeatmap("ws_default");
+    expect(missingFileHeatmap.isMissing).toBe(true);
+    expect(missingFileHeatmap.cohorts.length).toBe(0);
+    expect(missingFileHeatmap.emptyMessage).toContain("missing or unavailable");
+    process.env.RECOVERY_DIR = originalRecoveryDir;
 
     const shap = getShapWaterfall(17850, testWsId);
     expect(shap.features.length).toBeGreaterThan(0);
