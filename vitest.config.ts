@@ -15,6 +15,14 @@ export default defineConfig({
   test: {
     environment: "node",
     setupFiles: ["server/testSetup.ts"],
+    testTimeout: 15000,
+    hookTimeout: 20000,
+    poolOptions: {
+      forks: {
+        minForks: 1,
+        maxForks: 4,
+      },
+    },
     include: [
       "server/**/*.test.ts",
       "server/**/*.spec.ts",

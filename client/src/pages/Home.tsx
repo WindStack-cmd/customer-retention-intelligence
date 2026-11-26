@@ -38,7 +38,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatCurrency, formatDate } from "./homeData";
 
 function formatNumber(value: number) {
@@ -129,9 +129,9 @@ export default function Home() {
   const isAdmin = user?.role === "admin" || memberRole === "admin";
   const isCsm = memberRole === "csm";
   const isViewer = memberRole === "viewer";
-  const visibleNavIds = getVisibleNavIdsForRole(
-    memberRole,
-    user?.role === "admin"
+  const visibleNavIds = useMemo(
+    () => getVisibleNavIdsForRole(memberRole, user?.role === "admin"),
+    [memberRole, user?.role]
   );
   const topMainNavItems = visibleNavIds
     .filter(id => !adminNavIds.has(id) && id !== "metadata")
@@ -316,7 +316,7 @@ export default function Home() {
         window.clearTimeout(clickLockTimeoutRef.current);
       }
     };
-  }, [unlockClick, isAdmin, isCsm, isViewer]);
+  }, [unlockClick, visibleNavIds]);
   const [analystMessages, setAnalystMessages] = useState<AnalystMessage[]>([
     {
       role: "assistant",
