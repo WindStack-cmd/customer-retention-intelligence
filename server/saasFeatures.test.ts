@@ -422,17 +422,47 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
       provider: "okta",
       entityId: "https://identity.okta.com/app/pulseboard_saml",
       ssoUrl: "https://identity.okta.com/app/pulseboard_saml/sso/saml",
-      enforceSso: true,
+      enforceSso: false,
       domains: ["pulseboard.io", "enterprise.com"],
     });
 
     expect(sso.provider).toBe("okta");
-    expect(sso.enforceSso).toBe(true);
+    expect(sso.enforceSso).toBe(false);
     expect(sso.domains).toContain("enterprise.com");
     expect(sso.status).toBe("simulated");
 
     const fetched = tenantStorage.getSsoConfig(testWsId);
     expect(fetched.entityId).toBe("https://identity.okta.com/app/pulseboard_saml");
+  });
+
+  it("rejects enforceSso server-side while SAML ACS is disabled (501)", async () => {
+    const adminCaller = appRouter.createCaller({
+      req: {} as any,
+      res: {} as any,
+      user: { id: 1, openId: "admin", name: "Admin", role: "admin", email: "admin@test.com" } as any,
+      workspace: { id: testWsId, name: "Test WS", slug: "test", plan: "enterprise", customerLimit: 100000 } as any,
+      membership: { id: 1, workspaceId: testWsId, userId: 1, role: "admin" } as any,
+      role: "admin",
+    });
+
+    await expect(
+      adminCaller.security.updateSsoConfig({
+        provider: "okta",
+        entityId: "https://identity.okta.com/app/pulseboard_saml",
+        ssoUrl: "https://identity.okta.com/app/pulseboard_saml/sso/saml",
+        enforceSso: true,
+        domains: ["pulseboard.io"],
+      })
+    ).rejects.toThrow("Enforce SSO cannot be enabled while SAML ACS is disabled");
+
+    const res = await adminCaller.security.updateSsoConfig({
+      provider: "okta",
+      entityId: "https://identity.okta.com/app/pulseboard_saml",
+      ssoUrl: "https://identity.okta.com/app/pulseboard_saml/sso/saml",
+      enforceSso: false,
+      domains: ["pulseboard.io"],
+    });
+    expect(res.enforceSso).toBe(false);
   });
 
   it("strictly disables unvalidated SAML assertions and returns 501 on ACS", async () => {

@@ -403,23 +403,17 @@ export function BillingAndSecuritySection() {
             <input
               type="checkbox"
               id="enforceSso"
-              checked={enforceSso}
-              disabled={!ssoUrl.trim() || !ssoEntityId.trim()}
-              onChange={(e) => setEnforceSso(e.target.checked)}
+              checked={false}
+              disabled={true}
+              onChange={() => {}}
               className="rounded border-border bg-background text-primary focus:ring-0 disabled:opacity-40"
             />
             <label
               htmlFor="enforceSso"
-              className={`text-foreground ${
-                !ssoUrl.trim() || !ssoEntityId.trim()
-                  ? "opacity-60 cursor-not-allowed"
-                  : ""
-              }`}
+              className="text-foreground opacity-60 cursor-not-allowed"
             >
               Enforce SSO authentication for all users with matching email domains{" "}
-              {!ssoUrl.trim() || !ssoEntityId.trim()
-                ? "(requires configured IdP details above)"
-                : ""}
+              <span className="text-subtle-foreground">(Available when SAML login is enabled)</span>
             </label>
           </div>
 

@@ -881,6 +881,13 @@ export const appRouter = router({
         })
       )
       .mutation(({ ctx, input }) => {
+        if (input.enforceSso) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Enforce SSO cannot be enabled while SAML ACS is disabled (501). SAML login must be enabled first.",
+          });
+        }
         const updated = tenantStorage.saveSsoConfig(ctx.workspace.id, input);
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
