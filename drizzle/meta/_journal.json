@@ -57,6 +57,20 @@
       "when": 1792830000000,
       "tag": "0007_recovery_compatibility",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1795338900000,
+      "tag": "0008_saas_multi_tenancy",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1795410000000,
+      "tag": "0009_alert_rules_salesforce",
+      "breakpoints": true
     }
   ]
 }

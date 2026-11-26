@@ -12,6 +12,8 @@ import { createRequestId, logger } from "./logger";
 import { ENV } from "./env";
 
 import { tenantStorage } from "../tenantStorage";
+import { stripeWebhookMiddleware } from "../stripeWebhook";
+import { startScoringScheduler } from "../scoringScheduler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -105,6 +107,22 @@ async function startServer() {
     timestamps.push(now);
     rateLimitMap.set(verifiedKey.keyPrefix, timestamps);
 
+    // Enforce workspace customer limit based on subscription plan
+    const ws = tenantStorage.getWorkspace(verifiedKey.workspaceId);
+    const customerLimit = ws?.customerLimit ?? 10000;
+    const currentCustomerCount = tenantStorage.getTenantCustomerCount(
+      verifiedKey.workspaceId
+    );
+    if (currentCustomerCount >= customerLimit) {
+      return res.status(429).json({
+        error: "Plan limit exceeded",
+        message: `Workspace reached its limit of ${customerLimit.toLocaleString()} customers on the ${ws?.plan || "current"} plan. Upgrade your plan to ingest more customer records.`,
+        upgradeRequired: true,
+        currentCount: currentCustomerCount,
+        customerLimit,
+      });
+    }
+
     const { eventType, customerId, properties, timestamp } = req.body || {};
     if (!eventType || typeof eventType !== "string") {
       return res
@@ -130,23 +148,8 @@ async function startServer() {
     });
   });
 
-  // Stripe Webhook endpoint
-  app.post("/api/webhooks/stripe", (req, res) => {
-    const event = req.body;
-    console.log(`[Stripe Webhook] Received event: ${event?.type || "unknown"}`);
-    if (
-      event?.type === "customer.subscription.updated" ||
-      event?.type === "checkout.session.completed"
-    ) {
-      const workspaceId = event.data?.object?.client_reference_id;
-      if (workspaceId) {
-        tenantStorage.updateWorkspace(workspaceId, {
-          subscriptionStatus: "active",
-        });
-      }
-    }
-    return res.status(200).json({ received: true });
-  });
+  // Stripe Webhook endpoint with signature verification & mock fallback
+  app.post("/api/webhooks/stripe", stripeWebhookMiddleware);
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   // tRPC API
@@ -185,6 +188,7 @@ async function startServer() {
     console.log(
       `  \x1b[32m➜\x1b[0m  \x1b[1mHealth:\x1b[0m  \x1b[36mhttp://localhost:${port}/health\x1b[0m\n`
     );
+    startScoringScheduler();
   });
 }
 

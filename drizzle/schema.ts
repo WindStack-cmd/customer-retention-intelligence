@@ -1178,7 +1178,7 @@ export const alertRules = mysqlTable(
       .notNull()
       .references(() => workspaces.id),
     name: varchar("name", { length: 120 }).notNull(),
-    channel: mysqlEnum("channel", ["slack", "webhook", "hubspot"]).notNull(),
+    channel: mysqlEnum("channel", ["slack", "webhook", "hubspot", "salesforce"]).notNull(),
     webhookUrl: text("webhookUrl"),
     thresholdBand: mysqlEnum("thresholdBand", ["Urgent", "High", "Any"])
       .default("Urgent")

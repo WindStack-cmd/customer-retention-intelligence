@@ -99,20 +99,34 @@ function LoadingState({ label }: { label: string }) {
   );
 }
 
-const navItems = [
+const mainNavItems = [
   { id: "overview", label: "Overview", icon: Activity },
   { id: "customers", label: "Customers", icon: UsersRound },
   { id: "recommendations", label: "Actions", icon: Sparkles },
-  { id: "roi", label: "Retention ROI", icon: TrendingUp },
+  { id: "roi", label: "Impact/ROI", icon: TrendingUp },
   { id: "cohorts", label: "Cohorts", icon: Grid },
-  { id: "integrations", label: "Integrations", icon: Zap },
-  { id: "team", label: "Team", icon: ShieldCheck },
-  { id: "billing", label: "Billing & Security", icon: CreditCard },
   { id: "metadata", label: "Data & model", icon: Database },
 ];
 
+const adminNavItems = [
+  { id: "integrations", label: "Integrations", icon: Zap },
+  { id: "team", label: "Team", icon: ShieldCheck },
+  { id: "billing", label: "Billing & security", icon: CreditCard },
+];
+
+const allNavItems = [...mainNavItems, ...adminNavItems];
+
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
+  const currentWorkspaceQuery = trpc.workspace.current.useQuery(undefined, {
+    enabled: Boolean(user),
+    retry: false,
+  });
+  const memberRole = currentWorkspaceQuery.data?.role;
+  const isAdminOrCsm =
+    user?.role === "admin" ||
+    memberRole === "admin" ||
+    memberRole === "csm";
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -121,10 +135,11 @@ export default function Home() {
   );
   const [selectedCustomer, setSelectedCustomer] = useState<number | null>(null);
   const [mobileNav, setMobileNav] = useState(false);
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [activeNav, setActiveNav] = useState(() => {
     if (typeof window !== "undefined" && window.location.hash) {
       const hash = window.location.hash.replace("#", "");
-      if (navItems.some(item => item.id === hash)) {
+      if (allNavItems.some(item => item.id === hash)) {
         return hash;
       }
     }
@@ -173,7 +188,7 @@ export default function Home() {
     // Initial sync on mount if location.hash is set
     if (typeof window !== "undefined" && window.location.hash) {
       const initialHash = window.location.hash.replace("#", "");
-      if (navItems.some(item => item.id === initialHash)) {
+      if (allNavItems.some(item => item.id === initialHash)) {
         isClickLockedRef.current = true;
         const el = document.getElementById(initialHash);
         if (el) {
@@ -188,9 +203,9 @@ export default function Home() {
     const handleHashOrPopState = () => {
       if (isClickLockedRef.current) return;
       const hash = window.location.hash.replace("#", "");
-      const targetId = navItems.some(item => item.id === hash)
+      const targetId = allNavItems.some(item => item.id === hash)
         ? hash
-        : navItems[0].id;
+        : allNavItems[0].id;
       setActiveNav(targetId);
 
       const el = document.getElementById(targetId);
@@ -226,7 +241,8 @@ export default function Home() {
       const viewportHeight = window.innerHeight;
       const documentHeight = document.documentElement.scrollHeight;
 
-      const sectionElements = navItems
+      const activeNavPool = isAdminOrCsm ? allNavItems : mainNavItems;
+      const sectionElements = activeNavPool
         .map(item => document.getElementById(item.id))
         .filter((el): el is HTMLElement => el !== null);
 
@@ -249,10 +265,8 @@ export default function Home() {
         return;
       }
 
-      // Active section = last section whose top edge is at or above the trigger line (header height + 24px)
-      const header = document.querySelector("header");
-      const triggerLine =
-        (header ? header.getBoundingClientRect().height : 78) + 24;
+      // Active section = last section whose top edge is at or above the trigger line (~35% of viewport height)
+      const triggerLine = window.innerHeight * 0.35;
 
       let currentActiveId = sectionElements[0].id;
       for (const el of sectionElements) {
@@ -301,7 +315,7 @@ export default function Home() {
         window.clearTimeout(clickLockTimeoutRef.current);
       }
     };
-  }, [unlockClick]);
+  }, [unlockClick, isAdminOrCsm]);
   const [analystMessages, setAnalystMessages] = useState<AnalystMessage[]>([
     {
       role: "assistant",
@@ -346,8 +360,12 @@ export default function Home() {
     { enabled: enabled && selectedCustomer !== null, retry: false }
   );
 
+  const { data: analystQuota, refetch: refetchQuota } =
+    trpc.analyst.quota.useQuery(undefined, { enabled });
+
   const analyst = trpc.analyst.ask.useMutation({
     onSuccess: result => {
+      refetchQuota();
       setAnalystMessages(current => [
         ...current,
         {
@@ -366,6 +384,12 @@ export default function Home() {
             "The grounded analyst is temporarily unavailable. Executive KPIs and customer recommendations remain accessible.",
         },
       ]);
+      if (
+        error.message?.includes("limit reached") ||
+        error.data?.code === "TOO_MANY_REQUESTS"
+      ) {
+        setUpgradeModalOpen(true);
+      }
     },
   });
 
@@ -431,11 +455,14 @@ export default function Home() {
             </span>
           </span>
         </div>
-        <div className="px-3 pt-4">
+        <div className="px-3 pt-4 shrink-0">
+          <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[.2em] text-subtle-foreground">
+            Workspace
+          </p>
           <WorkspaceSwitcher />
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="Main navigation">
-          {navItems.map(item => {
+          {mainNavItems.map(item => {
             const isActive = activeNav === item.id;
             return (
               <a
@@ -445,8 +472,8 @@ export default function Home() {
                 aria-current={isActive ? "page" : undefined}
                 className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary ${
                   isActive
-                    ? "bg-accent-soft border border-primary/30 text-foreground font-semibold hover:bg-accent-soft hover:text-foreground shadow-xs"
-                    : "border border-transparent text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+                    ? "bg-accent-soft text-foreground font-semibold"
+                    : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                 }`}
               >
                 <item.icon
@@ -458,8 +485,41 @@ export default function Home() {
               </a>
             );
           })}
+
+          {isAdminOrCsm && (
+            <div className="pt-4">
+              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[.2em] text-subtle-foreground">
+                Admin
+              </p>
+              <div className="space-y-1">
+                {adminNavItems.map(item => {
+                  const isActive = activeNav === item.id;
+                  return (
+                    <a
+                      key={item.id}
+                      href={`#${item.id}`}
+                      onClick={() => handleNavClick(item.id)}
+                      aria-current={isActive ? "page" : undefined}
+                      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary ${
+                        isActive
+                          ? "bg-accent-soft text-foreground font-semibold"
+                          : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+                      }`}
+                    >
+                      <item.icon
+                        className={`h-[17px] w-[17px] shrink-0 transition-colors ${
+                          isActive ? "text-primary" : "text-muted-foreground"
+                        }`}
+                      />
+                      {item.label}
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </nav>
-        <div className="mt-auto border-t border-border p-4 bg-surface-2/40">
+        <div className="mt-auto shrink-0 border-t border-border p-4 bg-surface-2/40">
           <div className="flex items-center gap-3">
             <div className="grid h-8 w-8 place-items-center rounded-full bg-surface-2 border border-border text-xs font-bold text-foreground">
               {(user.name ?? "U").slice(0, 1).toUpperCase()}
@@ -494,13 +554,23 @@ export default function Home() {
                 </span>
               </p>
               <p className="mt-0.5 text-xs text-subtle-foreground">
-                Production workspace · protected API data
+                {currentWorkspaceQuery.data?.workspace?.id === "ws_default"
+                  ? "Production workspace · protected API data"
+                  : `${currentWorkspaceQuery.data?.workspace?.name ?? "Workspace"} · sample data`}
               </p>
             </div>
           </div>
           <div className="hidden items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-[11px] font-semibold text-foreground sm:flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary" /> Real
-            records
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                currentWorkspaceQuery.data?.workspace?.id === "ws_default"
+                  ? "bg-primary"
+                  : "bg-status-medium-text"
+              }`}
+            />{" "}
+            {currentWorkspaceQuery.data?.workspace?.id === "ws_default"
+              ? "Real records"
+              : "Sample data"}
           </div>
         </header>
         {mobileNav && (
@@ -519,29 +589,62 @@ export default function Home() {
               <WorkspaceSwitcher />
             </div>
             <div className="space-y-1 max-h-80 overflow-y-auto">
-              {navItems.map(item => {
-              const isActive = activeNav === item.id;
-              return (
-                <a
-                  key={item.id}
-                  href={`#${item.id}`}
-                  onClick={() => handleNavClick(item.id)}
-                  aria-current={isActive ? "page" : undefined}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary ${
-                    isActive
-                      ? "bg-accent-soft border border-primary/30 text-foreground font-semibold hover:bg-accent-soft hover:text-foreground shadow-xs"
-                      : "border border-transparent text-muted-foreground hover:bg-surface-hover hover:text-foreground"
-                  }`}
-                >
-                  <item.icon
-                    className={`h-[17px] w-[17px] shrink-0 transition-colors ${
-                      isActive ? "text-primary" : "text-muted-foreground"
+              {mainNavItems.map(item => {
+                const isActive = activeNav === item.id;
+                return (
+                  <a
+                    key={item.id}
+                    href={`#${item.id}`}
+                    onClick={() => handleNavClick(item.id)}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary ${
+                      isActive
+                        ? "bg-accent-soft text-foreground font-semibold"
+                        : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                     }`}
-                  />
-                  {item.label}
-                </a>
-              );
-            })}
+                  >
+                    <item.icon
+                      className={`h-[17px] w-[17px] shrink-0 transition-colors ${
+                        isActive ? "text-primary" : "text-muted-foreground"
+                      }`}
+                    />
+                    {item.label}
+                  </a>
+                );
+              })}
+
+              {isAdminOrCsm && (
+                <div className="pt-3">
+                  <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[.2em] text-subtle-foreground">
+                    Admin
+                  </p>
+                  <div className="space-y-1">
+                    {adminNavItems.map(item => {
+                      const isActive = activeNav === item.id;
+                      return (
+                        <a
+                          key={item.id}
+                          href={`#${item.id}`}
+                          onClick={() => handleNavClick(item.id)}
+                          aria-current={isActive ? "page" : undefined}
+                          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary ${
+                            isActive
+                              ? "bg-accent-soft text-foreground font-semibold"
+                              : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+                          }`}
+                        >
+                          <item.icon
+                            className={`h-[17px] w-[17px] shrink-0 transition-colors ${
+                              isActive ? "text-primary" : "text-muted-foreground"
+                            }`}
+                          />
+                          {item.label}
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -554,8 +657,16 @@ export default function Home() {
             <div>
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.15em] text-foreground">
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />{" "}
-                  Production data
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      currentWorkspaceQuery.data?.workspace?.id === "ws_default"
+                        ? "bg-primary"
+                        : "bg-status-medium-text"
+                    }`}
+                  />{" "}
+                  {currentWorkspaceQuery.data?.workspace?.id === "ws_default"
+                    ? "Production data"
+                    : "Sample data"}
                 </span>
                 <span className="text-[11px] text-subtle-foreground">
                   30-day behavioral horizon · cutoff{" "}
@@ -624,6 +735,13 @@ export default function Home() {
                   <span className="rounded-full border border-border bg-surface-2 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.13em] text-foreground">
                     Read only
                   </span>
+                  {analystQuota && (
+                    <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
+                      {analystQuota.limit >= 999999
+                        ? `Unlimited queries (${analystQuota.plan})`
+                        : `${analystQuota.remaining} of ${analystQuota.limit} queries left today (${analystQuota.plan})`}
+                    </span>
+                  )}
                 </div>
                 <p className="mt-1 max-w-2xl text-xs leading-5 text-subtle-foreground">
                   Answers use approved production records and include scope,
@@ -1135,6 +1253,40 @@ export default function Home() {
               </>
             )}
           </aside>
+        </div>
+      )}
+
+      {upgradeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <div className="flex items-center gap-2 text-status-urgent-text">
+              <AlertTriangle className="h-5 w-5" />
+              <h3 className="font-display text-base font-semibold text-foreground">
+                Plan Limit Reached
+              </h3>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              You have reached the usage limit for your current workspace plan. Upgrade your plan to increase customer scoring capacity and AI analyst query quotas.
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setUpgradeModalOpen(false)}
+                className="rounded-lg border border-border px-3.5 py-1.5 text-xs text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+              >
+                Dismiss
+              </button>
+              <button
+                onClick={() => {
+                  setUpgradeModalOpen(false);
+                  const el = document.getElementById("billing");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary-hover"
+              >
+                Upgrade Plan
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

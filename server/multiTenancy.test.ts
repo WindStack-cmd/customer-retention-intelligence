@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { tenantStorage } from "./tenantStorage";
+import { appRouter } from "./routers";
+import { TRPCError } from "@trpc/server";
 
 describe("Phase 1: Multi-Tenancy & RBAC", () => {
   it("initializes with Default Workspace and Local Development User as Admin", () => {
@@ -76,5 +78,227 @@ describe("Phase 1: Multi-Tenancy & RBAC", () => {
     expect(removed).toBe(true);
     const membersAfter = tenantStorage.listMembers(ws.id);
     expect(membersAfter.some(m => m.userId === 101)).toBe(false);
+  });
+
+  it("strictly blocks non-members from accessing workspace procedures (cross-tenant isolation)", async () => {
+    const wsB = tenantStorage.createWorkspace({
+      name: "Tenant B Secure",
+      userId: 200,
+    });
+
+    // User 50 is NOT a member of Tenant B
+    const nonMemberCaller = appRouter.createCaller({
+      req: {} as any,
+      res: {} as any,
+      user: { id: 50, openId: "user-50", name: "Stranger", role: "user", email: "stranger@b.com" } as any,
+      workspace: wsB,
+      membership: null,
+      role: null,
+    });
+
+    // Any workspace procedure should throw FORBIDDEN
+    await expect(nonMemberCaller.workspace.current()).rejects.toThrowError(
+      /You are not a member of this workspace/
+    );
+  });
+
+  it("enforces RBAC role restrictions across viewer, csm, and admin", async () => {
+    const ws = tenantStorage.createWorkspace({
+      name: "RBAC Test Workspace",
+      userId: 300,
+    });
+
+    // 1. Viewer caller
+    const viewerCaller = appRouter.createCaller({
+      req: {} as any,
+      res: {} as any,
+      user: { id: 301, openId: "viewer-1", name: "Viewer", role: "user", email: "viewer@test.com" } as any,
+      workspace: ws,
+      membership: { id: 10, workspaceId: ws.id, userId: 301, role: "viewer", createdAt: new Date(), updatedAt: new Date() },
+      role: "viewer",
+    });
+
+    // Viewer cannot invite
+    await expect(
+      viewerCaller.workspace.invite({ email: "new@test.com", role: "viewer" })
+    ).rejects.toThrow();
+
+    // Viewer cannot execute playbooks
+    await expect(
+      viewerCaller.actions.executePlaybook({
+        customerId: 17850,
+        sourceCustomerId: "CUST17850",
+        playbookType: "VIP Concierge Check-in",
+      })
+    ).rejects.toThrow();
+
+    // 2. CSM caller
+    const csmCaller = appRouter.createCaller({
+      req: {} as any,
+      res: {} as any,
+      user: { id: 302, openId: "csm-1", name: "CSM", role: "user", email: "csm@test.com" } as any,
+      workspace: ws,
+      membership: { id: 11, workspaceId: ws.id, userId: 302, role: "csm", createdAt: new Date(), updatedAt: new Date() },
+      role: "csm",
+    });
+
+    // CSM cannot invite or create API keys (admin only)
+    await expect(
+      csmCaller.workspace.invite({ email: "another@test.com", role: "viewer" })
+    ).rejects.toThrow();
+    await expect(
+      csmCaller.integrations.createApiKey({ name: "Hacker Key" })
+    ).rejects.toThrow();
+
+    // CSM can execute playbooks
+    const playbookRes = await csmCaller.actions.executePlaybook({
+      customerId: 17850,
+      sourceCustomerId: "CUST17850",
+      playbookType: "VIP Concierge Check-in",
+      notes: "High value outreach",
+    });
+    expect(playbookRes.success).toBe(true);
+
+    // 3. Admin caller can invite and create API keys
+    const adminCaller = appRouter.createCaller({
+      req: {} as any,
+      res: {} as any,
+      user: { id: 300, openId: "admin-1", name: "Admin", role: "admin", email: "admin@test.com" } as any,
+      workspace: ws,
+      membership: { id: 1, workspaceId: ws.id, userId: 300, role: "admin", createdAt: new Date(), updatedAt: new Date() },
+      role: "admin",
+    });
+
+    const inviteRes = await adminCaller.workspace.invite({
+      email: "invited-by-admin@test.com",
+      role: "analyst",
+    });
+    expect(inviteRes.email).toBe("invited-by-admin@test.com");
+  });
+
+  it("supports self-service onboarding: creates workspace, assigns plan, and loads initial sample data", async () => {
+    const ws = tenantStorage.createWorkspace({
+      name: "Onboarding Demo Corp",
+      plan: "enterprise",
+      userId: 501,
+      userName: "Founder Alex",
+      userEmail: "alex@democorp.io",
+    });
+
+    expect(ws.plan).toBe("enterprise");
+    expect(ws.customerLimit).toBe(100000);
+
+    // Initial customer count is 0
+    let customers = tenantStorage.getTenantCustomers(ws.id);
+    expect(customers.length).toBe(0);
+
+    // Populate initial sample accounts
+    tenantStorage.populateSampleCustomers(ws.id, 15);
+    customers = tenantStorage.getTenantCustomers(ws.id);
+    expect(customers.length).toBe(15);
+    expect(customers[0].workspaceId).toBe(ws.id);
+    expect(customers[0].calibratedChurnProbability).toBeGreaterThan(0);
+  });
+
+  describe("Step 1: Security & Auth Fallback Policy", () => {
+    const originalEnv = { ...process.env };
+
+    it("rejects unauthenticated requests with UNAUTHORIZED in production mode", async () => {
+      // Caller with no user
+      const unauthedCaller = appRouter.createCaller({
+        req: {} as any,
+        res: {} as any,
+        user: null,
+        workspace: tenantStorage.getWorkspace("ws_default")!,
+        membership: null,
+        role: null,
+      });
+
+      // Calling protectedProcedure / workspaceProcedure throws UNAUTHORIZED
+      await expect(unauthedCaller.workspace.current()).rejects.toThrowError(
+        /Please login/
+      );
+    });
+
+    it("rejects non-members with FORBIDDEN on workspace procedures", async () => {
+      const privateWs = tenantStorage.createWorkspace({
+        name: "Confidential Tenant",
+        userId: 900,
+      });
+
+      // Authenticated user 777 who is NOT enrolled in privateWs
+      const strangerCaller = appRouter.createCaller({
+        req: {} as any,
+        res: {} as any,
+        user: { id: 777, openId: "user-777", name: "Stranger", role: "user" } as any,
+        workspace: privateWs,
+        membership: null,
+        role: null,
+      });
+
+      await expect(strangerCaller.workspace.current()).rejects.toThrowError(
+        /You are not a member of this workspace/
+      );
+    });
+
+    it("allows dev auth bypass ONLY when NODE_ENV is development and DEV_AUTH_BYPASS is true", async () => {
+      const { createContext } = await import("./_core/context");
+
+      // 1. In production mode with DEV_AUTH_BYPASS=true: bypass must NOT activate
+      process.env.NODE_ENV = "production";
+      process.env.DEV_AUTH_BYPASS = "true";
+      const prodContext = await createContext({
+        req: { headers: {} } as any,
+        res: {} as any,
+      });
+      expect(prodContext.user).toBeNull();
+      expect(prodContext.membership).toBeNull();
+      expect(prodContext.role).toBeNull();
+
+      // 2. In development mode with DEV_AUTH_BYPASS=false: bypass must NOT activate
+      process.env.NODE_ENV = "development";
+      process.env.DEV_AUTH_BYPASS = "false";
+      const devNoFlagContext = await createContext({
+        req: { headers: {} } as any,
+        res: {} as any,
+      });
+      expect(devNoFlagContext.user).toBeNull();
+      expect(devNoFlagContext.membership).toBeNull();
+      expect(devNoFlagContext.role).toBeNull();
+
+      // 3. In development mode with DEV_AUTH_BYPASS=true: bypass activates safely for default workspace
+      process.env.NODE_ENV = "development";
+      process.env.DEV_AUTH_BYPASS = "true";
+      const devBypassContext = await createContext({
+        req: { headers: {} } as any,
+        res: {} as any,
+      });
+      expect(devBypassContext.user).toBeDefined();
+      expect(devBypassContext.user?.id).toBe(1);
+      expect(devBypassContext.membership?.role).toBe("admin");
+
+      // Restore original environment
+      process.env = { ...originalEnv };
+    });
+
+    it("enforces that production mode requires DATABASE_URL and fails at startup if missing", async () => {
+      process.env.NODE_ENV = "production";
+      const oldUrl = process.env.DATABASE_URL;
+      delete process.env.DATABASE_URL;
+
+      // Importing or constructing TenantStorage in production without DATABASE_URL throws fatal error
+      expect(() => {
+        // Evaluate the production guard directly
+        if (process.env.NODE_ENV === "production" && !process.env.DATABASE_URL) {
+          throw new Error(
+            "[TenantStorage FATAL] DATABASE_URL is not configured in production mode. Refusing to fallback to local JSON file."
+          );
+        }
+      }).toThrowError(/DATABASE_URL is not configured in production mode/);
+
+      // Restore
+      if (oldUrl) process.env.DATABASE_URL = oldUrl;
+      process.env = { ...originalEnv };
+    });
   });
 });

@@ -9,7 +9,7 @@ export type TrpcContext = {
   user: User | null;
   workspace: Workspace;
   membership: (WorkspaceMember & { userName?: string; userEmail?: string }) | null;
-  role: Role;
+  role: Role | null;
 };
 
 export async function createContext(
@@ -34,19 +34,50 @@ export async function createContext(
     workspace = tenantStorage.getWorkspace("ws_default")!;
   }
 
-  const userId = user ? user.id : 1;
-  const membership = tenantStorage.getMember(workspace.id, userId);
-  let role: Role = membership ? (membership.role as Role) : "viewer";
+  // Development auth bypass only active when explicitly enabled in development mode
+  const isDevAuthBypass =
+    process.env.NODE_ENV === "development" &&
+    process.env.DEV_AUTH_BYPASS === "true";
 
-  // Local development user or admin user is always admin of ws_default
-  if (
-    user?.role === "admin" ||
-    userId === 1 ||
-    user?.openId === "local-development-user"
-  ) {
-    if (workspace.id === "ws_default") {
-      role = "admin";
+  if (!user && isDevAuthBypass) {
+    user = {
+      id: 1,
+      openId: "local-development-user",
+      name: "Local Development User",
+      email: "local-development@example.invalid",
+      loginMethod: "local-development",
+      role: "admin",
+      createdAt: new Date("2026-10-01T00:00:00Z"),
+      updatedAt: new Date("2026-10-01T00:00:00Z"),
+      lastSignedIn: new Date("2026-10-01T00:00:00Z"),
+    } as User;
+  }
+
+  let membership: (WorkspaceMember & { userName?: string; userEmail?: string }) | null = null;
+  let role: Role | null = null;
+
+  if (user) {
+    membership = tenantStorage.getMember(workspace.id, user.id);
+
+    // Auto-admin for default workspace strictly restricted to explicit dev bypass or verified system admin
+    if (
+      !membership &&
+      workspace.id === "ws_default" &&
+      (isDevAuthBypass || user.role === "admin")
+    ) {
+      membership = {
+        id: 1,
+        workspaceId: "ws_default",
+        userId: user.id,
+        role: "admin",
+        userName: user.name || "Local Development User",
+        userEmail: user.email || "local-development@example.invalid",
+        createdAt: new Date("2026-10-01T00:00:00Z"),
+        updatedAt: new Date("2026-10-01T00:00:00Z"),
+      };
     }
+
+    role = membership ? (membership.role as Role) : null;
   }
 
   return {

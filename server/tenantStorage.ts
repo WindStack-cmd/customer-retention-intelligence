@@ -25,7 +25,31 @@ export interface MemberDetail extends WorkspaceMember {
   userEmail: string;
 }
 
-const CACHE_FILE = path.resolve(process.env.TENANT_CACHE_FILE ?? "data/tenants_cache.json");
+export function getCacheFilePath(): string {
+  return path.resolve(process.env.TENANT_CACHE_FILE ?? "data/tenants_cache.json");
+}
+
+export interface SsoConfig {
+  provider: "google" | "microsoft" | "okta";
+  entityId: string;
+  ssoUrl: string;
+  certificateFingerprint?: string;
+  enforceSso: boolean;
+  domains: string[];
+  status: "unconfigured" | "configured" | "simulated";
+  updatedAt?: string;
+}
+
+export interface PlaybookTemplate {
+  id: string;
+  name: string;
+  category: string;
+  subject: string;
+  body: string;
+  discountPercent: number;
+  cooldownDays: number;
+  description?: string;
+}
 
 interface TenantCacheData {
   workspaces: Workspace[];
@@ -39,7 +63,76 @@ interface TenantCacheData {
   alertRules: AlertRule[];
   auditLogs: AuditLog[];
   tenantCustomers: Record<string, any[]>;
+  analystDailyUsage?: Record<string, number>;
+  integrationsConfig?: Record<
+    string,
+    Record<
+      string,
+      {
+        connected: boolean;
+        mode: "mock" | "live";
+        apiKeyMasked?: string;
+        webhookUrl?: string;
+        lastSyncAt?: string;
+      }
+    >
+  >;
+  playbookTemplates?: Record<string, PlaybookTemplate[]>;
+  ssoConfig?: Record<string, SsoConfig>;
 }
+
+export const ANALYST_DAILY_LIMITS: Record<string, number> = {
+  starter: 20,
+  pro: 200,
+  enterprise: 999999,
+};
+
+export const DEFAULT_PLAYBOOK_TEMPLATES: PlaybookTemplate[] = [
+  {
+    id: "winback-discount-15",
+    name: "Win-back 15% Incentive Offer",
+    category: "Discount",
+    subject: "Special invitation: 15% off your next purchase",
+    body: "Hi {{customerName}}, we noticed you haven't shopped with us recently. Here is an exclusive discount code: {{discountCode}}.",
+    discountPercent: 15,
+    cooldownDays: 30,
+    description:
+      "Sends customized win-back email with 15% discount voucher for at-risk accounts.",
+  },
+  {
+    id: "executive-checkin",
+    name: "Executive CSM Check-in",
+    category: "Direct Outreach",
+    subject: "Checking in from the executive customer team",
+    body: "Hi {{customerName}}, I wanted to reach out directly to ensure everything is running smoothly and see how we can assist.",
+    discountPercent: 0,
+    cooldownDays: 14,
+    description:
+      "Initiates personalized high-touch outreach from Account Executive or CSM.",
+  },
+  {
+    id: "feature-webinar",
+    name: "Product Mastery & Feature Activation",
+    category: "Education",
+    subject: "Invitation: Exclusive Customer Retention Masterclass",
+    body: "Hi {{customerName}}, discover new tools and workflows in our live customer success session this Thursday.",
+    discountPercent: 0,
+    cooldownDays: 60,
+    description:
+      "Invites accounts to private webinar focusing on unadopted high-retention features.",
+  },
+  {
+    id: "vip-loyalty-upgrade",
+    name: "VIP Tier Upgrade with Free Shipping",
+    category: "Loyalty",
+    subject: "Complimentary VIP status upgrade for your account",
+    body: "Hi {{customerName}}, you've been upgraded to our VIP tier with free priority shipping and member rewards.",
+    discountPercent: 20,
+    cooldownDays: 45,
+    description:
+      "Comp-upgrades customer to VIP status to re-engage historical high-value buyers.",
+  },
+];
 
 function loadInitialData(): TenantCacheData {
   const defaultWs: Workspace = {
@@ -81,9 +174,10 @@ function loadInitialData(): TenantCacheData {
     },
   ];
 
-  if (fs.existsSync(CACHE_FILE)) {
+  const cacheFilePath = getCacheFilePath();
+  if (fs.existsSync(cacheFilePath)) {
     try {
-      const raw = fs.readFileSync(CACHE_FILE, "utf-8");
+      const raw = fs.readFileSync(cacheFilePath, "utf-8");
       const parsed = JSON.parse(raw);
       // Ensure default workspace and admin member always exist
       if (!parsed.workspaces?.some((w: Workspace) => w.id === "ws_default")) {
@@ -92,8 +186,26 @@ function loadInitialData(): TenantCacheData {
       if (!parsed.members?.some((m: WorkspaceMember) => m.workspaceId === "ws_default" && m.userId === 1)) {
         parsed.members = [defaultAdminMember, ...(parsed.members || [])];
       }
-      if (!parsed.alertRules) parsed.alertRules = defaultAlertRules;
+      // Idempotent alert rules: seed only if ws_default has none, and deduplicate identical names
+      if (!parsed.alertRules || parsed.alertRules.length === 0) {
+        parsed.alertRules = [...defaultAlertRules];
+      } else if (!parsed.alertRules.some((r: AlertRule) => r.workspaceId === "ws_default")) {
+        parsed.alertRules.push(defaultAlertRules[0]);
+      } else {
+        const seen = new Set<string>();
+        parsed.alertRules = parsed.alertRules.filter((r: AlertRule) => {
+          if (r.workspaceId === "ws_default") {
+            const key = `${r.workspaceId}:${r.name}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+          }
+          return true;
+        });
+      }
       if (!parsed.tenantCustomers) parsed.tenantCustomers = {};
+      if (!parsed.analystDailyUsage) parsed.analystDailyUsage = {};
+      if (!parsed.integrationsConfig) parsed.integrationsConfig = {};
+      if (!parsed.ssoConfig) parsed.ssoConfig = {};
       return parsed;
     } catch {
       // Corrupt cache file, start fresh
@@ -109,30 +221,106 @@ function loadInitialData(): TenantCacheData {
     scoringRuns: [],
     interventions: [],
     notes: [],
-    alertRules: defaultAlertRules,
+    alertRules: [...defaultAlertRules],
     auditLogs: [],
     tenantCustomers: {},
+    analystDailyUsage: {},
+    integrationsConfig: {},
+    ssoConfig: {},
   };
 }
+
+import { getDb } from "./db";
+import {
+  workspaces,
+  workspaceMembers,
+  workspaceApiKeys,
+  workspaceEvents,
+  scoringRuns,
+  interventions,
+  customerNotes,
+  alertRules,
+  auditLogs,
+} from "../drizzle/schema";
 
 class TenantStorage {
   private data: TenantCacheData;
 
   constructor() {
     this.data = loadInitialData();
+    if (process.env.NODE_ENV === "production") {
+      if (!process.env.DATABASE_URL) {
+        throw new Error(
+          "[TenantStorage FATAL] DATABASE_URL is not configured in production mode. Refusing to fallback to local JSON file."
+        );
+      }
+      console.log(`[TenantStorage] Running in production mode with DATABASE_URL.`);
+    } else {
+      console.log(`[TenantStorage] Storage initialized. Dev fallback cache active (${getCacheFilePath()}).`);
+    }
+  }
+
+  public resetStore(freshData?: TenantCacheData) {
+    this.data = freshData ?? loadInitialData();
+    this.save();
+  }
+
+  public reloadFromDisk() {
+    this.data = loadInitialData();
+  }
+
+  private async persistToDb<T>(table: any, values: any) {
+    try {
+      const db = await getDb();
+      if (db) {
+        await db.insert(table).values(values);
+      }
+    } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        console.error("[TenantStorage DB Write Failure]", err);
+        throw err;
+      } else {
+        // Dev fallback mode: database offline warning
+        console.warn("[TenantStorage Dev Warning] DB write skipped (offline):", (err as any)?.message);
+      }
+    }
+  }
+
+  public async migrateCacheToDatabase(): Promise<{ success: boolean; importedCount: number }> {
+    const db = await getDb();
+    if (!db) {
+      console.log(`[TenantStorage] MySQL is offline. Running in local dev fallback mode (${getCacheFilePath()}).`);
+      return { success: false, importedCount: 0 };
+    }
+    let count = 0;
+    try {
+      for (const ws of this.data.workspaces) {
+        await db.insert(workspaces).values(ws).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+        count++;
+      }
+      return { success: true, importedCount: count };
+    } catch (err) {
+      console.warn("[TenantStorage] Migration error:", err);
+      return { success: false, importedCount: count };
+    }
   }
 
   private save() {
     try {
-      const dir = path.dirname(CACHE_FILE);
+      const filePath = getCacheFilePath();
+      const dir = path.dirname(filePath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(CACHE_FILE, JSON.stringify(this.data, null, 2), "utf-8");
+      fs.writeFileSync(filePath, JSON.stringify(this.data, null, 2), "utf-8");
     } catch (err) {
       console.warn("[TenantStorage] Failed to persist cache:", err);
     }
   }
 
   // Workspaces
+  listAllWorkspaces(): Workspace[] {
+    return [...this.data.workspaces];
+  }
+
   getWorkspace(id: string): Workspace | null {
     return this.data.workspaces.find(w => w.id === id) ?? null;
   }
@@ -215,6 +403,14 @@ class TenantStorage {
     this.data.members.push(member);
     this.save();
 
+    // Primary store write to database when MySQL is available
+    this.persistToDb(workspaces, workspace);
+    this.persistToDb(workspaceMembers, {
+      workspaceId: id,
+      userId: params.userId,
+      role: "admin",
+    });
+
     return {
       ...workspace,
       userRole: "admin",
@@ -228,6 +424,57 @@ class TenantStorage {
     Object.assign(ws, updates, { updatedAt: new Date() });
     this.save();
     return ws;
+  }
+
+  updateSubscription(
+    workspaceId: string,
+    updates: {
+      plan?: "starter" | "pro" | "enterprise";
+      subscriptionStatus?: string;
+      stripeCustomerId?: string | null;
+      stripeSubscriptionId?: string | null;
+      customerLimit?: number;
+    }
+  ): Workspace {
+    const ws = this.getWorkspace(workspaceId);
+    if (!ws) throw new Error("Workspace not found");
+    if (updates.plan) {
+      ws.plan = updates.plan;
+      if (updates.customerLimit === undefined) {
+        ws.customerLimit =
+          updates.plan === "starter"
+            ? 1000
+            : updates.plan === "enterprise"
+              ? 100000
+              : 10000;
+      }
+    }
+    if (updates.customerLimit !== undefined) ws.customerLimit = updates.customerLimit;
+    if (updates.subscriptionStatus !== undefined)
+      ws.subscriptionStatus = updates.subscriptionStatus;
+    if (updates.stripeCustomerId !== undefined)
+      ws.stripeCustomerId = updates.stripeCustomerId;
+    if (updates.stripeSubscriptionId !== undefined)
+      ws.stripeSubscriptionId = updates.stripeSubscriptionId;
+    ws.updatedAt = new Date();
+    this.save();
+    return ws;
+  }
+
+  findWorkspaceByStripeCustomer(
+    stripeCustomerId: string
+  ): Workspace | undefined {
+    return this.data.workspaces.find(
+      w => w.stripeCustomerId === stripeCustomerId
+    );
+  }
+
+  findWorkspaceByStripeSubscription(
+    stripeSubscriptionId: string
+  ): Workspace | undefined {
+    return this.data.workspaces.find(
+      w => w.stripeSubscriptionId === stripeSubscriptionId
+    );
   }
 
   // Memberships & Roles
@@ -404,6 +651,13 @@ class TenantStorage {
 
     this.data.apiKeys.push(key);
     this.save();
+    this.persistToDb(workspaceApiKeys, {
+      workspaceId,
+      name,
+      keyPrefix,
+      keyHash,
+      createdBy: userId,
+    });
     return { apiKey: key, rawSecret };
   }
 
@@ -450,6 +704,17 @@ class TenantStorage {
     };
     this.data.events.push(entry);
     this.save();
+    this.persistToDb(workspaceEvents, {
+      workspaceId: event.workspaceId,
+      eventType: event.eventType,
+      customerId: event.customerId != null ? String(event.customerId) : null,
+      properties: event.properties
+        ? typeof event.properties === "string"
+          ? event.properties
+          : JSON.stringify(event.properties)
+        : null,
+      source: event.source || "api",
+    });
     return entry;
   }
 
@@ -462,6 +727,20 @@ class TenantStorage {
 
   // Scoring Runs
   createScoringRun(workspaceId: string, triggerType: "scheduled" | "manual" | "sync"): ScoringRun {
+    // Expire stale runs older than 30 minutes
+    const staleThreshold = Date.now() - 30 * 60 * 1000;
+    for (const r of this.data.scoringRuns) {
+      if (
+        r.workspaceId === workspaceId &&
+        (r.status === "running" || r.status === "pending") &&
+        new Date(r.startedAt).getTime() < staleThreshold
+      ) {
+        r.status = "failed";
+        r.error = "Scoring run timed out (stale execution)";
+        r.completedAt = new Date();
+      }
+    }
+
     // Ensure no job is currently running for this tenant
     const active = this.data.scoringRuns.find(
       r => r.workspaceId === workspaceId && (r.status === "running" || r.status === "pending")
@@ -484,6 +763,13 @@ class TenantStorage {
     };
     this.data.scoringRuns.push(run);
     this.save();
+    this.persistToDb(scoringRuns, {
+      workspaceId,
+      status: "running",
+      triggerType,
+      customersScored: 0,
+      revenueAtRisk: "0.00",
+    });
     return run;
   }
 
@@ -555,6 +841,22 @@ class TenantStorage {
     };
     this.data.interventions.push(item);
     this.save();
+    this.persistToDb(interventions, {
+      workspaceId: intervention.workspaceId,
+      customerId: intervention.customerId,
+      sourceCustomerId: intervention.sourceCustomerId,
+      playbookType: intervention.playbookType,
+      templateName: intervention.templateName ?? null,
+      recipientEmail: intervention.recipientEmail ?? null,
+      incentiveCode: intervention.incentiveCode ?? null,
+      incentiveAmount: intervention.incentiveAmount ?? null,
+      status: intervention.status,
+      performedBy: intervention.performedBy,
+      performedByName: intervention.performedByName ?? null,
+      outcome: "pending",
+      revenueSaved: "0.00",
+      details: item.details,
+    });
     return item;
   }
 
@@ -577,6 +879,13 @@ class TenantStorage {
     };
     this.data.notes.push(entry);
     this.save();
+    this.persistToDb(customerNotes, {
+      workspaceId,
+      customerId,
+      authorId,
+      authorName,
+      note,
+    });
     return entry;
   }
 
@@ -595,7 +904,7 @@ class TenantStorage {
     id?: number;
     workspaceId: string;
     name: string;
-    channel: "slack" | "webhook" | "hubspot";
+    channel: "slack" | "webhook" | "hubspot" | "salesforce";
     webhookUrl?: string | null;
     thresholdBand: "Urgent" | "High" | "Any";
     minRiskProbability: string;
@@ -624,6 +933,16 @@ class TenantStorage {
     };
     this.data.alertRules.push(newRule);
     this.save();
+    this.persistToDb(alertRules, {
+      workspaceId: rule.workspaceId,
+      name: rule.name,
+      channel: rule.channel,
+      webhookUrl: rule.webhookUrl ?? null,
+      thresholdBand: rule.thresholdBand,
+      minRiskProbability: rule.minRiskProbability,
+      minRevenueAtRisk: rule.minRevenueAtRisk,
+      enabled: rule.enabled ?? 1,
+    });
     return newRule;
   }
 
@@ -633,6 +952,48 @@ class TenantStorage {
     this.data.alertRules.splice(idx, 1);
     this.save();
     return true;
+  }
+
+  toggleAlertRule(workspaceId: string, ruleId: number): AlertRule | null {
+    const rule = this.data.alertRules.find(
+      r => r.workspaceId === workspaceId && r.id === ruleId
+    );
+    if (!rule) return null;
+    rule.enabled = rule.enabled === 1 ? 0 : 1;
+    this.save();
+    return rule;
+  }
+
+  // SSO / SAML Configuration
+  getSsoConfig(workspaceId: string): SsoConfig {
+    if (!this.data.ssoConfig) this.data.ssoConfig = {};
+    if (!this.data.ssoConfig[workspaceId]) {
+      this.data.ssoConfig[workspaceId] = {
+        provider: "okta",
+        entityId: "https://identity.okta.com/app/pulseboard_saml",
+        ssoUrl: "https://identity.okta.com/app/pulseboard_saml/sso/saml",
+        certificateFingerprint: "SHA-256: 3D:7A:B4:89:12:F0:45:9E:21:8B:D4:56:88:AC:E0:12",
+        enforceSso: false,
+        domains: ["pulseboard.io"],
+        status: "simulated",
+        updatedAt: new Date().toISOString(),
+      };
+    }
+    return this.data.ssoConfig[workspaceId];
+  }
+
+  saveSsoConfig(workspaceId: string, config: Partial<SsoConfig>): SsoConfig {
+    if (!this.data.ssoConfig) this.data.ssoConfig = {};
+    const existing = this.getSsoConfig(workspaceId);
+    const updated: SsoConfig = {
+      ...existing,
+      ...config,
+      status: "simulated",
+      updatedAt: new Date().toISOString(),
+    };
+    this.data.ssoConfig[workspaceId] = updated;
+    this.save();
+    return updated;
   }
 
   // Audit Logs
@@ -646,11 +1007,16 @@ class TenantStorage {
     details?: any;
     ipAddress?: string | null;
   }): AuditLog {
+    const actorName =
+      log.userName ||
+      (log.userId ? this.getMember(log.workspaceId, log.userId)?.userName : null) ||
+      (log.userId === 1 ? "Local Development User" : "Workspace User");
+
     const item: AuditLog = {
       id: this.data.auditLogs.length + 1,
       workspaceId: log.workspaceId,
       userId: log.userId ?? null,
-      userName: log.userName ?? null,
+      userName: actorName,
       action: log.action,
       resourceType: log.resourceType,
       resourceId: log.resourceId ?? null,
@@ -664,6 +1030,16 @@ class TenantStorage {
     };
     this.data.auditLogs.push(item);
     this.save();
+    this.persistToDb(auditLogs, {
+      workspaceId: log.workspaceId,
+      userId: log.userId ?? null,
+      userName: actorName,
+      action: log.action,
+      resourceType: log.resourceType,
+      resourceId: log.resourceId ?? null,
+      details: item.details,
+      ipAddress: log.ipAddress ?? null,
+    });
     return item;
   }
 
@@ -697,6 +1073,241 @@ class TenantStorage {
   setTenantCustomers(workspaceId: string, customers: any[]): void {
     this.data.tenantCustomers[workspaceId] = customers;
     this.save();
+  }
+
+  getTenantCustomerCount(workspaceId: string): number {
+    if (workspaceId === "ws_default") {
+      return 4122;
+    }
+    const customers = this.getTenantCustomers(workspaceId);
+    if (customers.length > 0) return customers.length;
+    const events = this.data.events.filter(
+      e => e.workspaceId === workspaceId && e.customerId
+    );
+    const uniqueIds = new Set(events.map(e => e.customerId));
+    return uniqueIds.size;
+  }
+
+  getAnalystDailyUsage(workspaceId: string): {
+    used: number;
+    limit: number;
+    remaining: number;
+    plan: string;
+  } {
+    const ws = this.getWorkspace(workspaceId);
+    const plan = ws?.plan || "pro";
+    const limit = ANALYST_DAILY_LIMITS[plan] ?? 200;
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `${workspaceId}:${today}`;
+    const used =
+      (this.data.analystDailyUsage && this.data.analystDailyUsage[key]) || 0;
+    return {
+      used,
+      limit,
+      remaining: Math.max(0, limit - used),
+      plan,
+    };
+  }
+
+  incrementAnalystUsage(workspaceId: string): {
+    allowed: boolean;
+    used: number;
+    limit: number;
+    plan: string;
+  } {
+    const ws = this.getWorkspace(workspaceId);
+    const plan = ws?.plan || "pro";
+    const limit = ANALYST_DAILY_LIMITS[plan] ?? 200;
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `${workspaceId}:${today}`;
+    if (!this.data.analystDailyUsage) {
+      this.data.analystDailyUsage = {};
+    }
+    const current = this.data.analystDailyUsage[key] || 0;
+    if (current >= limit) {
+      return { allowed: false, used: current, limit, plan };
+    }
+    this.data.analystDailyUsage[key] = current + 1;
+    this.save();
+    return { allowed: true, used: current + 1, limit, plan };
+  }
+
+  getIntegrationConfig(workspaceId: string): Record<
+    string,
+    {
+      connected: boolean;
+      mode: "mock" | "live";
+      apiKeyMasked?: string;
+      lastSyncAt?: string;
+    }
+  > {
+    const wsConfig =
+      (this.data.integrationsConfig &&
+        this.data.integrationsConfig[workspaceId]) ||
+      {};
+    const hasStripeEnv = Boolean(
+      process.env.STRIPE_SECRET_KEY &&
+        !process.env.STRIPE_SECRET_KEY.includes("placeholder")
+    );
+    const hasShopifyEnv = Boolean(process.env.SHOPIFY_API_KEY);
+
+    return {
+      stripe: wsConfig.stripe || {
+        connected: true,
+        mode: hasStripeEnv ? "live" : "mock",
+        lastSyncAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
+      },
+      shopify: wsConfig.shopify || {
+        connected: true,
+        mode: hasShopifyEnv ? "live" : "mock",
+        lastSyncAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
+      },
+    };
+  }
+
+  updateIntegrationConfig(
+    workspaceId: string,
+    source: "stripe" | "shopify",
+    config: {
+      connected: boolean;
+      mode?: "mock" | "live";
+      apiKey?: string;
+      webhookUrl?: string;
+    }
+  ) {
+    if (!this.data.integrationsConfig) this.data.integrationsConfig = {};
+    if (!this.data.integrationsConfig[workspaceId])
+      this.data.integrationsConfig[workspaceId] = {};
+
+    const existing =
+      this.data.integrationsConfig[workspaceId][source] || {};
+    const apiKeyMasked = config.apiKey
+      ? `${config.apiKey.slice(0, 6)}••••••••${config.apiKey.slice(-4)}`
+      : existing.apiKeyMasked;
+
+    this.data.integrationsConfig[workspaceId][source] = {
+      connected: config.connected,
+      mode:
+        config.mode ||
+        (config.apiKey?.startsWith("live_") || config.apiKey?.startsWith("sk_live")
+          ? "live"
+          : "mock"),
+      apiKeyMasked,
+      webhookUrl: config.webhookUrl || existing.webhookUrl,
+      lastSyncAt: existing.lastSyncAt || new Date().toISOString(),
+    };
+    this.save();
+    return this.data.integrationsConfig[workspaceId][source];
+  }
+
+  updateIntegrationSyncTime(workspaceId: string, source: "stripe" | "shopify" | "sample" | "api") {
+    if (!this.data.integrationsConfig) this.data.integrationsConfig = {};
+    if (!this.data.integrationsConfig[workspaceId])
+      this.data.integrationsConfig[workspaceId] = {};
+    const existing = this.data.integrationsConfig[workspaceId][source] || {
+      connected: true,
+      mode: "mock",
+    };
+    existing.lastSyncAt = new Date().toISOString();
+    this.data.integrationsConfig[workspaceId][source] = existing;
+    this.save();
+  }
+
+  populateSampleCustomers(workspaceId: string): number {
+    const existing = this.getTenantCustomers(workspaceId);
+    if (existing.length > 0) return existing.length;
+
+    const sampleBands = ["Urgent", "High", "Monitor"] as const;
+    const countries = [
+      "United Kingdom",
+      "Germany",
+      "France",
+      "United States",
+      "Australia",
+      "Canada",
+    ];
+    const actions = [
+      "VIP Concierge Check-in",
+      "Executive outreach & contract discount",
+      "Win-back 15% Incentive Offer",
+      "Proactive Support Check-in",
+      "Feature adoption walkthrough",
+    ];
+
+    const samples = Array.from({ length: 15 }, (_, idx) => {
+      const id = 90001 + idx;
+      const band = sampleBands[idx % sampleBands.length];
+      const risk =
+        band === "Urgent"
+          ? 0.75 + (idx % 20) * 0.01
+          : band === "High"
+            ? 0.55 + (idx % 15) * 0.01
+            : 0.25 + (idx % 10) * 0.01;
+      const clv = 1500 + idx * 450;
+      const revAtRisk = Number((clv * risk).toFixed(2));
+      const score = Math.round(risk * 100);
+
+      return {
+        workspaceId,
+        customerId: id,
+        sourceCustomerId: `EXT-${10000 + idx}`,
+        country: countries[idx % countries.length],
+        firstActivityAt: new Date(
+          Date.now() - (180 + idx * 10) * 86400000
+        ).toISOString(),
+        lastActivityAt: new Date(
+          Date.now() - (15 + idx * 2) * 86400000
+        ).toISOString(),
+        priorityScore: score,
+        priorityBand: band,
+        recommendedAction: actions[idx % actions.length],
+        rationale: `Customer shows ${Math.round(risk * 100)}% churn risk due to order slowdown and return activity.`,
+        supportingSignals: {
+          daysSinceLastPurchase: 25 + idx * 3,
+          revenueAtRisk: revAtRisk,
+          returnRate: 0.12,
+        },
+        benefitEvidence:
+          "High value customer with historically strong repurchase rate.",
+        calibratedChurnProbability: Number(risk.toFixed(4)),
+        behavioralClv: clv,
+        revenueAtRisk: revAtRisk,
+        expectedFutureValue: Math.round(clv * (1 - risk)),
+        cutoffAt: new Date().toISOString(),
+      };
+    });
+
+    this.setTenantCustomers(workspaceId, samples);
+    return samples.length;
+  }
+
+  listPlaybookTemplates(workspaceId: string): PlaybookTemplate[] {
+    const custom =
+      this.data.playbookTemplates && this.data.playbookTemplates[workspaceId];
+    if (custom && custom.length > 0) return custom;
+    return DEFAULT_PLAYBOOK_TEMPLATES;
+  }
+
+  savePlaybookTemplate(
+    workspaceId: string,
+    template: PlaybookTemplate
+  ): PlaybookTemplate {
+    if (!this.data.playbookTemplates) this.data.playbookTemplates = {};
+    if (!this.data.playbookTemplates[workspaceId]) {
+      this.data.playbookTemplates[workspaceId] = [
+        ...DEFAULT_PLAYBOOK_TEMPLATES,
+      ];
+    }
+    const idx = this.data.playbookTemplates[workspaceId].findIndex(
+      t => t.id === template.id
+    );
+    if (idx >= 0) {
+      this.data.playbookTemplates[workspaceId][idx] = template;
+    } else {
+      this.data.playbookTemplates[workspaceId].push(template);
+    }
+    this.save();
+    return template;
   }
 }
 

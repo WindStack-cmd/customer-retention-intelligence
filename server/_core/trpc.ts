@@ -37,6 +37,13 @@ export const workspaceProcedure = protectedProcedure.use(async opts => {
     });
   }
 
+  if (!ctx.membership || !ctx.role) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "You are not a member of this workspace",
+    });
+  }
+
   return next({
     ctx: {
       ...ctx,

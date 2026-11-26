@@ -28,6 +28,7 @@ import { analystQuestionSchema, answerAnalystQuestion } from "./analyst";
 import { tenantStorage, type Role } from "./tenantStorage";
 import { sendPlaybookEmail, dispatchAlert } from "./playbookService";
 import { executeScoringRun } from "./scoringRunner";
+import { getSchedulerStatus } from "./scoringScheduler";
 import {
   BILLING_PLANS,
   createCheckoutSession,
@@ -124,6 +125,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "workspace.updated",
           resourceType: "workspace",
           resourceId: ctx.workspace.id,
@@ -154,6 +156,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "team.member_invited",
           resourceType: "invite",
           resourceId: String(invite.id),
@@ -181,6 +184,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "team.role_updated",
           resourceType: "member",
           resourceId: String(input.userId),
@@ -202,6 +206,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "team.member_removed",
           resourceType: "member",
           resourceId: String(input.userId),
@@ -278,31 +283,63 @@ export const appRouter = router({
   analyst: router({
     ask: viewerProcedure
       .input(analystQuestionSchema)
-      .mutation(({ input }) => readOnly(() => answerAnalystQuestion(input))),
+      .mutation(async ({ ctx, input }) => {
+        const check = tenantStorage.incrementAnalystUsage(ctx.workspace.id);
+        if (!check.allowed) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: `Daily AI Analyst question limit reached (${check.limit}/day on the ${check.plan} plan). Please upgrade your workspace plan to ask more questions.`,
+          });
+        }
+        return readOnly(() => answerAnalystQuestion(input));
+      }),
+
+    quota: viewerProcedure.query(({ ctx }) => {
+      return tenantStorage.getAnalystDailyUsage(ctx.workspace.id);
+    }),
   }),
 
   // Phase 2: Ingestion, Connectors, & Scoring Runner
   integrations: router({
     status: workspaceProcedure.query(({ ctx }) => {
-      const hasStripe = Boolean(process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_SECRET_KEY.includes("placeholder"));
-      const hasShopify = Boolean(process.env.SHOPIFY_API_KEY);
+      const config = tenantStorage.getIntegrationConfig(ctx.workspace.id);
       return {
-        stripe: {
-          connected: hasStripe,
-          mode: hasStripe ? "live" : "mock",
-          lastSync: "2026-11-20T12:00:00Z",
-        },
-        shopify: {
-          connected: hasShopify,
-          mode: hasShopify ? "live" : "mock",
-          lastSync: "2026-11-21T08:30:00Z",
-        },
+        stripe: config.stripe,
+        shopify: config.shopify,
         inboundApi: {
           endpoint: "/api/v1/events",
           status: "active",
         },
       };
     }),
+
+    configureConnector: adminProcedure
+      .input(
+        z.object({
+          source: z.enum(["stripe", "shopify"]),
+          connected: z.boolean(),
+          mode: z.enum(["mock", "live"]).optional(),
+          apiKey: z.string().optional(),
+          webhookUrl: z.string().optional(),
+        })
+      )
+      .mutation(({ ctx, input }) => {
+        const res = tenantStorage.updateIntegrationConfig(
+          ctx.workspace.id,
+          input.source,
+          input
+        );
+        tenantStorage.logAudit({
+          workspaceId: ctx.workspace.id,
+          userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
+          action: `integration.${input.source}_configured`,
+          resourceType: "integration",
+          resourceId: input.source,
+          details: { mode: res.mode, connected: res.connected },
+        });
+        return res;
+      }),
 
     apiKeys: adminProcedure.query(({ ctx }) => {
       return tenantStorage.listApiKeys(ctx.workspace.id);
@@ -319,6 +356,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "api_key.created",
           resourceType: "api_key",
           resourceId: String(result.apiKey.id),
@@ -334,11 +372,48 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "api_key.revoked",
           resourceType: "api_key",
           resourceId: String(input.id),
         });
         return { success: ok };
+      }),
+
+    rotateApiKey: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ ctx, input }) => {
+        const key = tenantStorage
+          .listApiKeys(ctx.workspace.id)
+          .find(k => k.id === input.id);
+        if (!key) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "API key not found",
+          });
+        }
+        // 1. Create replacement key with the same name
+        const result = tenantStorage.createApiKey(
+          ctx.workspace.id,
+          key.name,
+          ctx.user?.id || 1
+        );
+        // 2. Revoke old key
+        tenantStorage.revokeApiKey(ctx.workspace.id, input.id);
+
+        tenantStorage.logAudit({
+          workspaceId: ctx.workspace.id,
+          userId: ctx.user?.id,
+          action: "api_key.rotated",
+          resourceType: "api_key",
+          resourceId: String(result.apiKey.id),
+          details: {
+            oldKeyId: input.id,
+            newKeyPrefix: result.apiKey.keyPrefix,
+          },
+        });
+
+        return result;
       }),
 
     events: workspaceProcedure
@@ -356,21 +431,51 @@ export const appRouter = router({
         );
       }),
 
+    schedulerStatus: workspaceProcedure.query(({ ctx }) => {
+      return getSchedulerStatus(ctx.workspace.id);
+    }),
+
     triggerScoring: csmProcedure.mutation(async ({ ctx }) => {
       return await executeScoringRun(ctx.workspace.id, "manual");
     }),
 
     triggerSync: adminProcedure
-      .input(z.object({ source: z.enum(["stripe", "shopify"]) }))
+      .input(z.object({ source: z.enum(["stripe", "shopify", "sample", "api"]) }))
       .mutation(async ({ ctx, input }) => {
-        // Mock sync ingestion
+        const currentCount = tenantStorage.getTenantCustomerCount(
+          ctx.workspace.id
+        );
+        if (currentCount >= ctx.workspace.customerLimit) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: `Workspace reached its limit of ${ctx.workspace.customerLimit.toLocaleString()} customers on the ${ctx.workspace.plan} plan. Upgrade to sync more records.`,
+          });
+        }
+
+        // If workspace is empty, populate sample customers and score them
+        let recordsProcessed = 142;
+        let ordersUpdated = 87;
+        const currentCustomers = tenantStorage.getTenantCustomerCount(
+          ctx.workspace.id
+        );
+        if (currentCustomers === 0 && ctx.workspace.id !== "ws_default") {
+          const populated = tenantStorage.populateSampleCustomers(
+            ctx.workspace.id
+          );
+          recordsProcessed = populated;
+          ordersUpdated = populated * 3;
+        }
+
+        tenantStorage.updateIntegrationSyncTime(ctx.workspace.id, input.source);
+
+        // Record sync event
         tenantStorage.recordEvent({
           workspaceId: ctx.workspace.id,
           eventType: `${input.source}.sync_completed`,
           source: input.source,
           properties: {
-            recordsProcessed: 142,
-            ordersUpdated: 87,
+            recordsProcessed,
+            ordersUpdated,
             status: "synced_successfully",
           },
           timestamp: new Date(),
@@ -379,53 +484,56 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: `integration.${input.source}_sync`,
           resourceType: "integration",
           resourceId: input.source,
-          details: { mock: true, recordsProcessed: 142 },
+          details: { mock: true, recordsProcessed },
         });
 
         return {
           success: true,
           source: input.source,
-          recordsProcessed: 142,
-          message: `${input.source.toUpperCase()} data synchronized successfully.`,
+          recordsProcessed,
+          message: `${input.source.toUpperCase()} data synchronized successfully (${recordsProcessed} records processed).`,
         };
       }),
   }),
 
   // Phase 3: Closed-Loop Retention Actions, Playbooks, Alerts, Notes
   actions: router({
-    playbooks: workspaceProcedure.query(() => [
-      {
-        id: "winback-discount-15",
-        name: "Win-back 15% Incentive Offer",
-        category: "Discount",
-        defaultDiscount: "15%",
-        description: "Sends customized win-back email with 15% discount voucher for at-risk accounts.",
-      },
-      {
-        id: "executive-checkin",
-        name: "Executive CSM Check-in",
-        category: "Direct Outreach",
-        defaultDiscount: "None",
-        description: "Initiates personalized high-touch outreach from Account Executive or CSM.",
-      },
-      {
-        id: "feature-webinar",
-        name: "Product Mastery & Feature Activation",
-        category: "Education",
-        defaultDiscount: "None",
-        description: "Invites accounts to private webinar focusing on unadopted high-retention features.",
-      },
-      {
-        id: "vip-loyalty-upgrade",
-        name: "VIP Tier Upgrade with Free Shipping",
-        category: "Loyalty",
-        defaultDiscount: "VIP Tier",
-        description: "Comp-upgrades customer to VIP status to re-engage historical high-value buyers.",
-      },
-    ]),
+    playbooks: workspaceProcedure.query(({ ctx }) => {
+      return tenantStorage.listPlaybookTemplates(ctx.workspace.id);
+    }),
+
+    savePlaybookTemplate: adminProcedure
+      .input(
+        z.object({
+          id: z.string(),
+          name: z.string().min(2),
+          category: z.string(),
+          subject: z.string().min(2),
+          body: z.string().min(2),
+          discountPercent: z.number().min(0).max(100),
+          cooldownDays: z.number().min(1).max(365),
+        })
+      )
+      .mutation(({ ctx, input }) => {
+        const saved = tenantStorage.savePlaybookTemplate(
+          ctx.workspace.id,
+          input
+        );
+        tenantStorage.logAudit({
+          workspaceId: ctx.workspace.id,
+          userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
+          action: "playbook.template_updated",
+          resourceType: "playbook",
+          resourceId: input.id,
+          details: { name: input.name, subject: input.subject },
+        });
+        return saved;
+      }),
 
     executePlaybook: csmProcedure
       .input(
@@ -441,34 +549,63 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        const templates = tenantStorage.listPlaybookTemplates(ctx.workspace.id);
+        const template = templates.find(
+          t => t.id === input.playbookType || t.name === input.playbookType
+        );
+
+        const discountCode =
+          input.incentiveCode ||
+          (template?.discountPercent
+            ? `SAVE${template.discountPercent}`
+            : undefined);
+        const discountAmount =
+          input.incentiveAmount ||
+          (template?.discountPercent ? String(template.discountPercent) : null);
+
         // Dispatch email via Resend/SendGrid or Mock
         const emailResult = await sendPlaybookEmail({
-          to: input.recipientEmail || `customer-${input.sourceCustomerId}@client-domain.com`,
-          templateName: input.templateName || input.playbookType,
+          to:
+            input.recipientEmail ||
+            `customer-${input.sourceCustomerId}@client-domain.com`,
+          templateName:
+            template?.name || input.templateName || input.playbookType,
           customerName: `Customer #${input.sourceCustomerId}`,
-          discountCode: input.incentiveCode,
+          discountCode,
           workspaceName: ctx.workspace.name,
+          subject: template?.subject,
+          body: template?.body,
         });
 
-        // Save intervention record
+        // Save intervention record with explicit discountCode and discountAmount
         const intervention = tenantStorage.recordIntervention({
           workspaceId: ctx.workspace.id,
           customerId: input.customerId,
           sourceCustomerId: input.sourceCustomerId,
           playbookType: input.playbookType,
-          templateName: input.templateName ?? null,
-          recipientEmail: input.recipientEmail ?? null,
-          incentiveCode: input.incentiveCode ?? null,
-          incentiveAmount: input.incentiveAmount ?? null,
+          templateName:
+            template?.name || input.templateName || input.playbookType,
+          recipientEmail:
+            input.recipientEmail ||
+            `customer-${input.sourceCustomerId}@client-domain.com`,
+          incentiveCode: discountCode ?? null,
+          incentiveAmount: discountAmount ?? null,
           status: emailResult.status === "sent" ? "sent" : "delivered",
           performedBy: ctx.user?.id || 1,
           performedByName: ctx.user?.name || "CSM Representative",
-          details: { ...input.details, provider: emailResult.provider },
+          details: {
+            ...input.details,
+            provider: emailResult.provider,
+            subject: template?.subject,
+            discountCode,
+            discountAmount,
+          },
         });
 
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "playbook.executed",
           resourceType: "intervention",
           resourceId: String(intervention.id),
@@ -476,6 +613,8 @@ export const appRouter = router({
             customerId: input.customerId,
             playbookType: input.playbookType,
             recipient: input.recipientEmail,
+            incentiveCode: discountCode,
+            incentiveAmount: discountAmount,
           },
         });
 
@@ -494,21 +633,49 @@ export const appRouter = router({
     roiSummary: workspaceProcedure.query(({ ctx }) => {
       const interventions = tenantStorage.listInterventions(ctx.workspace.id);
       const totalSent = interventions.length;
-      
-      // Realistically calculate saved revenue and retention uplift
-      const estimatedSavedPerIntervention = 420; // Average recovered customer value
-      const totalRevenueSaved = totalSent * estimatedSavedPerIntervention;
-      const contactedRetentionRate = 68.4;
-      const nonContactedRetentionRate = 32.1;
-      const uplift = contactedRetentionRate - nonContactedRetentionRate;
+
+      if (totalSent === 0) {
+        return {
+          sampleData: true,
+          totalInterventions: 0,
+          revenueSavedThisMonth: 0,
+          contactedRetentionRate: null,
+          nonContactedRetentionRate: null,
+          retentionUpliftPercentage: null,
+          activePlaybooksCount: 4,
+          message:
+            "No interventions recorded yet. Execute playbooks to measure observed retention impact.",
+        };
+      }
+
+      // Compute strictly from actual intervention records
+      const completed = interventions.filter(i => i.outcome !== "pending");
+      const retained = interventions.filter(i => i.outcome === "retained");
+      const revenueSaved = retained.reduce(
+        (sum, i) => sum + (Number(i.revenueSaved) || 0),
+        0
+      );
+
+      const contactedRetentionRate =
+        completed.length > 0 ? (retained.length / completed.length) * 100 : null;
+      const baselineBenchmark = 32.1;
+      const difference =
+        contactedRetentionRate !== null
+          ? Number((contactedRetentionRate - baselineBenchmark).toFixed(1))
+          : null;
 
       return {
+        sampleData: false,
         totalInterventions: totalSent,
-        revenueSavedThisMonth: totalRevenueSaved,
-        contactedRetentionRate,
-        nonContactedRetentionRate,
-        retentionUpliftPercentage: uplift,
+        revenueSavedThisMonth: revenueSaved,
+        contactedRetentionRate:
+          contactedRetentionRate !== null
+            ? Number(contactedRetentionRate.toFixed(1))
+            : null,
+        nonContactedRetentionRate: baselineBenchmark,
+        retentionUpliftPercentage: difference,
         activePlaybooksCount: 4,
+        message: null,
       };
     }),
 
@@ -538,6 +705,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "customer.note_added",
           resourceType: "note",
           resourceId: String(note.id),
@@ -556,7 +724,7 @@ export const appRouter = router({
         z.object({
           id: z.number().optional(),
           name: z.string().min(2).max(128),
-          channel: z.enum(["slack", "webhook", "hubspot"]),
+          channel: z.enum(["slack", "webhook", "hubspot", "salesforce"]),
           webhookUrl: z.string().url().optional(),
           thresholdBand: z.enum(["Urgent", "High", "Any"]),
           minRiskProbability: z.string(),
@@ -574,6 +742,7 @@ export const appRouter = router({
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: input.id ? "alert_rule.updated" : "alert_rule.created",
           resourceType: "alert_rule",
           resourceId: String(rule.id),
@@ -583,13 +752,32 @@ export const appRouter = router({
         return rule;
       }),
 
+    toggleAlertRule: adminProcedure
+      .input(z.object({ ruleId: z.number() }))
+      .mutation(({ ctx, input }) => {
+        const rule = tenantStorage.toggleAlertRule(
+          ctx.workspace.id,
+          input.ruleId
+        );
+        if (!rule)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Alert rule not found",
+          });
+        return rule;
+      }),
+
     deleteAlertRule: adminProcedure
       .input(z.object({ ruleId: z.number() }))
       .mutation(({ ctx, input }) => {
-        const ok = tenantStorage.deleteAlertRule(ctx.workspace.id, input.ruleId);
+        const ok = tenantStorage.deleteAlertRule(
+          ctx.workspace.id,
+          input.ruleId
+        );
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || ctx.membership?.userName || "Workspace User",
           action: "alert_rule.deleted",
           resourceType: "alert_rule",
           resourceId: String(input.ruleId),
@@ -601,7 +789,7 @@ export const appRouter = router({
       .input(
         z.object({
           ruleId: z.number().optional(),
-          channel: z.enum(["slack", "webhook", "hubspot"]),
+          channel: z.enum(["slack", "webhook", "hubspot", "salesforce"]),
           webhookUrl: z.string().optional(),
         })
       )
@@ -649,6 +837,16 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        const targetPlan = BILLING_PLANS[input.planId];
+        const customers = tenantStorage.getTenantCustomers(ctx.workspace.id);
+        const customerCount =
+          ctx.workspace.id === "ws_default" ? 4122 : customers.length;
+        if (targetPlan && customerCount > targetPlan.customerLimit) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Cannot downgrade: current workspace customer count (${customerCount}) exceeds ${targetPlan.name} limit (${targetPlan.customerLimit}).`,
+          });
+        }
         return await createCheckoutSession({
           workspaceId: ctx.workspace.id,
           planId: input.planId,
@@ -667,6 +865,45 @@ export const appRouter = router({
   }),
 
   security: router({
+    ssoConfig: adminProcedure.query(({ ctx }) => {
+      return tenantStorage.getSsoConfig(ctx.workspace.id);
+    }),
+
+    updateSsoConfig: adminProcedure
+      .input(
+        z.object({
+          provider: z.enum(["google", "microsoft", "okta"]),
+          entityId: z.string().min(1),
+          ssoUrl: z.string().url(),
+          certificateFingerprint: z.string().optional(),
+          enforceSso: z.boolean(),
+          domains: z.array(z.string()),
+        })
+      )
+      .mutation(({ ctx, input }) => {
+        const updated = tenantStorage.saveSsoConfig(ctx.workspace.id, input);
+        tenantStorage.logAudit({
+          workspaceId: ctx.workspace.id,
+          userId: ctx.user?.id,
+          userName: ctx.user?.name || "Admin",
+          action: "security.sso_configured",
+          resourceType: "sso_config",
+          resourceId: input.provider,
+          details: { provider: input.provider, enforceSso: input.enforceSso, domains: input.domains },
+        });
+        return updated;
+      }),
+
+    samlMetadata: adminProcedure.query(({ ctx }) => {
+      const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
+      return {
+        acsUrl: `${baseUrl}/api/auth/saml/acs`,
+        entityId: `${baseUrl}/saml/metadata/${ctx.workspace.id}`,
+        binding: "HTTP-POST",
+        nameIdFormat: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+      };
+    }),
+
     auditLogs: adminProcedure
       .input(
         z
@@ -688,12 +925,15 @@ export const appRouter = router({
           .listInterventions(ctx.workspace.id)
           .filter(i => i.customerId === input.customerId);
 
+        const requester = ctx.user?.email || ctx.user?.name || "Admin User";
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || "System",
           action: "compliance.gdpr_export",
           resourceType: "customer",
           resourceId: String(input.customerId),
+          details: { requestedBy: requester },
         });
 
         return {
@@ -709,13 +949,15 @@ export const appRouter = router({
     gdprErase: adminProcedure
       .input(customerIdSchema)
       .mutation(({ ctx, input }) => {
+        const requester = ctx.user?.email || ctx.user?.name || "Admin User";
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,
           userId: ctx.user?.id,
+          userName: ctx.user?.name || "System",
           action: "compliance.gdpr_erasure",
           resourceType: "customer",
           resourceId: String(input.customerId),
-          details: { anonymized: true, policy: "GDPR Article 17 Right to Erasure" },
+          details: { requestedBy: requester, anonymized: true, policy: "GDPR Article 17 Right to Erasure" },
         });
 
         return {

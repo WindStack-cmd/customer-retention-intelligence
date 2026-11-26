@@ -54,6 +54,25 @@ export function registerOAuthRoutes(app: Express) {
     }
   });
 
+  // SAML 2.0 / Enterprise SSO Assertion Consumer Service (ACS)
+  // Secure default: XML signature, audience, destination, and replay validation requires
+  // an approved SAML library (such as @node-saml/node-saml). Unvalidated assertions are strictly rejected with 501.
+  app.post("/api/auth/saml/acs", (_req: Request, res: Response) => {
+    res.status(501).json({
+      error: "SSO login not enabled",
+      message:
+        "SAML ACS endpoint is disabled until an approved SAML signature verification package (@node-saml/node-saml) is installed and enabled. Configuration and SP metadata remain available.",
+    });
+  });
+
+  app.get("/api/auth/sso/login", (_req: Request, res: Response) => {
+    res.status(501).json({
+      error: "SSO login not enabled",
+      message:
+        "SSO authentication is disabled pending IdP signature validation library approval.",
+    });
+  });
+
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");

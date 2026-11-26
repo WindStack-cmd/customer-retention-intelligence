@@ -44,7 +44,7 @@ export const BILLING_PLANS: Record<string, PlanConfig> = {
       "Dedicated model calibration",
       "Custom CRM sync (HubSpot, Salesforce)",
       "Audit logging & GDPR/CCPA exports",
-      "Dedicated CSM & SLA guarantee",
+      "Priority support & enterprise compliance",
     ],
   },
 };

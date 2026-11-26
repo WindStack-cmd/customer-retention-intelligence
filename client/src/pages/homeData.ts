@@ -12,9 +12,10 @@ export function formatCurrency(value: number, compact = false) {
 
 export function formatDate(value: string | null) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(
-    new Date(value)
-  );
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeZone: "UTC",
+  }).format(new Date(value));
 }
 
 export function riskFilterToApiInput(filter: "all" | "urgent" | "high") {

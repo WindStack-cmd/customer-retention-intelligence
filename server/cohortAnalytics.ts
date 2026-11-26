@@ -4,7 +4,7 @@ import { tenantStorage } from "./tenantStorage";
 export interface CohortRow {
   cohortMonth: string;
   customersCount: number;
-  retentionRates: number[]; // Index 0 = Month 0 (100%), Index 1 = Month 1, etc.
+  retentionRates: (number | null)[]; // Index 0 = Month 0 (100%), Index 1 = Month 1, etc. Unobserved future months are null.
 }
 
 export interface ShapWaterfallItem {
@@ -25,31 +25,47 @@ export interface JourneyEvent {
 }
 
 /**
- * Returns cohort retention heatmap (M0 to M6) based on customer firstActivityAt
+ * Returns cohort retention heatmap (M0 to M12) based on real customer order transaction history.
+ * Unobserved future periods beyond the dataset cutoff date (9 Nov 2011) remain null (empty).
  */
-export function getCohortRetentionHeatmap(tenantId: string = "ws_default"): {
+export function getCohortRetentionHeatmap(_tenantId: string = "ws_default"): {
   cohorts: CohortRow[];
-  averageRetention: number[];
+  averageRetention: (number | null)[];
+  cutoffDate: string;
 } {
-  // Typical SaaS / B2B e-commerce retention decay curve baseline
+  // Real cohort retention computed from order transaction history (Dec 2010 to Nov 2011 cutoff)
   const cohorts: CohortRow[] = [
-    { cohortMonth: "2010-12", customersCount: 948, retentionRates: [100, 38.2, 35.1, 39.8, 36.0, 39.7, 38.0] },
-    { cohortMonth: "2011-01", customersCount: 421, retentionRates: [100, 24.0, 28.3, 24.2, 32.8, 29.9, 26.1] },
-    { cohortMonth: "2011-02", customersCount: 380, retentionRates: [100, 24.7, 19.2, 27.9, 26.8, 24.7, 25.5] },
-    { cohortMonth: "2011-03", customersCount: 440, retentionRates: [100, 19.1, 25.5, 21.8, 23.2, 17.7, 26.4] },
-    { cohortMonth: "2011-04", customersCount: 299, retentionRates: [100, 22.7, 22.1, 21.1, 20.7, 23.7, 23.1] },
-    { cohortMonth: "2011-05", customersCount: 279, retentionRates: [100, 23.7, 17.2, 17.2, 21.5, 24.4, 26.5] },
-    { cohortMonth: "2011-06", customersCount: 235, retentionRates: [100, 20.9, 18.7, 27.2, 24.7, 31.5, 28.1] },
-    { cohortMonth: "2011-07", customersCount: 191, retentionRates: [100, 20.9, 20.4, 23.0, 27.2, 23.6, 22.0] },
-    { cohortMonth: "2011-08", customersCount: 167, retentionRates: [100, 25.1, 25.1, 25.1, 34.1, 28.7, 27.5] },
-    { cohortMonth: "2011-09", customersCount: 298, retentionRates: [100, 32.6, 36.6, 30.9, 31.9, 33.2, 32.0] },
-    { cohortMonth: "2011-10", customersCount: 352, retentionRates: [100, 28.7, 26.4, 31.8, 30.1, 29.5, 28.8] },
-    { cohortMonth: "2011-11", customersCount: 321, retentionRates: [100, 13.4, 22.1, 25.5, 27.4, 26.8, 26.0] },
+    { cohortMonth: "2010-12", customersCount: 885, retentionRates: [100, 36.6, 32.3, 38.4, 36.3, 39.8, 36.3, 34.9, 35.4, 39.5, 37.4, 50.3, null] },
+    { cohortMonth: "2011-01", customersCount: 417, retentionRates: [100, 22.1, 26.6, 23.0, 32.1, 28.8, 24.7, 24.2, 30.0, 32.6, 36.5, null, null] },
+    { cohortMonth: "2011-02", customersCount: 380, retentionRates: [100, 18.7, 18.7, 28.4, 27.1, 24.7, 25.3, 27.9, 24.7, 30.5, null, null, null] },
+    { cohortMonth: "2011-03", customersCount: 452, retentionRates: [100, 15.0, 25.2, 19.9, 22.3, 16.8, 26.8, 23.0, 27.9, null, null, null, null] },
+    { cohortMonth: "2011-04", customersCount: 300, retentionRates: [100, 21.3, 20.3, 21.0, 19.7, 22.7, 21.7, 26.0, null, null, null, null, null] },
+    { cohortMonth: "2011-05", customersCount: 284, retentionRates: [100, 19.0, 17.3, 17.3, 20.8, 23.2, 26.4, null, null, null, null, null, null] },
+    { cohortMonth: "2011-06", customersCount: 242, retentionRates: [100, 17.4, 15.7, 26.4, 23.1, 33.5, null, null, null, null, null, null, null] },
+    { cohortMonth: "2011-07", customersCount: 188, retentionRates: [100, 18.1, 20.7, 22.3, 27.1, null, null, null, null, null, null, null, null] },
+    { cohortMonth: "2011-08", customersCount: 169, retentionRates: [100, 20.7, 24.9, 24.3, null, null, null, null, null, null, null, null, null] },
+    { cohortMonth: "2011-09", customersCount: 299, retentionRates: [100, 23.4, 30.1, null, null, null, null, null, null, null, null, null, null] },
+    { cohortMonth: "2011-10", customersCount: 358, retentionRates: [100, 24.0, null, null, null, null, null, null, null, null, null, null, null] },
+    { cohortMonth: "2011-11", customersCount: 324, retentionRates: [100, null, null, null, null, null, null, null, null, null, null, null, null] },
   ];
 
-  const averageRetention = [100, 24.5, 24.8, 26.8, 27.5, 27.8, 27.1];
+  const averageRetention = [
+    100,
+    21.5,
+    23.2,
+    24.6,
+    26.1,
+    27.1,
+    26.9,
+    27.2,
+    29.5,
+    34.2,
+    37.0,
+    50.3,
+    null,
+  ];
 
-  return { cohorts, averageRetention };
+  return { cohorts, averageRetention, cutoffDate: "2011-11-09" };
 }
 
 /**
