@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { isDevLike } from "./_core/env";
 import type {
   Workspace,
   WorkspaceMember,
@@ -175,7 +176,7 @@ function loadInitialData(): TenantCacheData {
   ];
 
   const cacheFilePath = getCacheFilePath();
-  if (fs.existsSync(cacheFilePath)) {
+  if (isDevLike() && fs.existsSync(cacheFilePath)) {
     try {
       const raw = fs.readFileSync(cacheFilePath, "utf-8");
       const parsed = JSON.parse(raw);
@@ -243,19 +244,20 @@ import {
   auditLogs,
 } from "../drizzle/schema";
 
-class TenantStorage {
+export class TenantStorage {
   private data: TenantCacheData;
 
   constructor() {
-    this.data = loadInitialData();
-    if (process.env.NODE_ENV === "production") {
+    if (!isDevLike()) {
       if (!process.env.DATABASE_URL) {
         throw new Error(
           "[TenantStorage FATAL] DATABASE_URL is not configured in production mode. Refusing to fallback to local JSON file."
         );
       }
+      this.data = loadInitialData();
       console.log(`[TenantStorage] Running in production mode with DATABASE_URL.`);
     } else {
+      this.data = loadInitialData();
       console.log(`[TenantStorage] Storage initialized. Dev fallback cache active (${getCacheFilePath()}).`);
     }
   }
@@ -280,7 +282,7 @@ class TenantStorage {
       }
     } catch (err) {
       recordDbFailure(err);
-      if (process.env.NODE_ENV === "production") {
+      if (!isDevLike()) {
         console.error("[TenantStorage DB Write Failure]", err);
         throw err;
       } else {
@@ -310,6 +312,9 @@ class TenantStorage {
   }
 
   private save() {
+    if (!isDevLike()) {
+      return;
+    }
     try {
       const filePath = getCacheFilePath();
       const dir = path.dirname(filePath);
@@ -1149,7 +1154,7 @@ class TenantStorage {
       (this.data.integrationsConfig &&
         this.data.integrationsConfig[workspaceId]) ||
       {};
-    const isProduction = process.env.NODE_ENV === "production";
+    const isProduction = !isDevLike();
     const hasStripeEnv = Boolean(
       process.env.STRIPE_SECRET_KEY &&
         !process.env.STRIPE_SECRET_KEY.includes("placeholder")

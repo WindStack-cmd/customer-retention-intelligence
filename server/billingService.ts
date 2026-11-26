@@ -1,4 +1,5 @@
 import { tenantStorage } from "./tenantStorage";
+import { isDevLike } from "./_core/env";
 
 export interface PlanConfig {
   id: "starter" | "pro" | "enterprise";
@@ -57,7 +58,7 @@ export async function createCheckoutSession(params: {
   planId: "starter" | "pro" | "enterprise";
   returnUrl: string;
 }): Promise<{ url: string; mode: "stripe" | "mock" }> {
-  const isProduction = process.env.NODE_ENV === "production";
+  const isProduction = !isDevLike();
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   const hasStripeKey = Boolean(stripeKey && !stripeKey.includes("placeholder"));
   const workspace = tenantStorage.getWorkspace(params.workspaceId);
@@ -120,7 +121,7 @@ export async function createPortalSession(params: {
   workspaceId: string;
   returnUrl: string;
 }): Promise<{ url: string; mode: "stripe" | "mock" }> {
-  const isProduction = process.env.NODE_ENV === "production";
+  const isProduction = !isDevLike();
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   const hasStripeKey = Boolean(stripeKey && !stripeKey.includes("placeholder"));
 

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { tenantStorage } from "./tenantStorage";
+import { isDevLike } from "./_core/env";
 
 export interface PlaybookEmailPayload {
   to: string;
@@ -114,7 +115,10 @@ export async function sendPlaybookEmail(
     }
   }
 
-  // Realistic mock simulation
+  // Realistic mock simulation (dev/test only)
+  if (!isDevLike()) {
+    throw new Error("Email gateway not configured in production");
+  }
   const mockId = `mock_msg_${crypto.randomBytes(8).toString("hex")}`;
   console.log(
     `[PlaybookService MOCK] Sent playbook email "${payload.templateName}" to ${payload.to} with incentive ${payload.discountCode || "N/A"} (ID: ${mockId})`
@@ -134,7 +138,7 @@ export async function dispatchAlert(
 ): Promise<{ success: boolean; status: "dispatched" | "simulated"; detail: string }> {
   // 1. HubSpot CRM Task API
   if (payload.channel === "hubspot") {
-    const isProduction = process.env.NODE_ENV === "production";
+    const isProduction = !isDevLike();
     const token = process.env.HUBSPOT_ACCESS_TOKEN;
     if (token && !token.includes("placeholder")) {
       try {
@@ -183,7 +187,7 @@ export async function dispatchAlert(
 
   // 2. Salesforce CRM Task API
   if (payload.channel === "salesforce") {
-    const isProduction = process.env.NODE_ENV === "production";
+    const isProduction = !isDevLike();
     const token = process.env.SALESFORCE_ACCESS_TOKEN;
     const instanceUrl = process.env.SALESFORCE_INSTANCE_URL || "https://login.salesforce.com";
     if (token && !token.includes("placeholder")) {
@@ -252,7 +256,7 @@ export async function dispatchAlert(
     }
   }
 
-  if (process.env.NODE_ENV === "production") {
+  if (!isDevLike()) {
     return {
       success: false,
       status: "simulated",

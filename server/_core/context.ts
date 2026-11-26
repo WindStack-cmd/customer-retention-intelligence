@@ -1,6 +1,7 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User, Workspace, WorkspaceMember } from "../../drizzle/schema";
 import { sdk } from "./sdk";
+import { isDevLike } from "./env";
 import { tenantStorage, type Role } from "../tenantStorage";
 
 export type TrpcContext = {
@@ -34,8 +35,9 @@ export async function createContext(
     workspace = tenantStorage.getWorkspace("ws_default")!;
   }
 
-  // Development auth bypass only active when explicitly enabled in development mode
+  // Development auth bypass only active when explicitly enabled in dev-like development mode
   const isDevAuthBypass =
+    isDevLike() &&
     process.env.NODE_ENV === "development" &&
     process.env.DEV_AUTH_BYPASS === "true";
 

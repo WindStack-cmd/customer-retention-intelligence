@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import type { Request, Response } from "express";
 import { tenantStorage } from "./tenantStorage";
+import { isDevLike } from "./_core/env";
 
 export interface StripeWebhookResult {
   handled: boolean;
@@ -154,6 +155,9 @@ export function stripeWebhookMiddleware(req: Request, res: Response) {
       return res.status(400).json({ error: "Invalid Stripe webhook signature" });
     }
     console.log("[Stripe Webhook VERIFIED] Signature verified successfully");
+  } else if (!isDevLike()) {
+    console.error("[Stripe Webhook] STRIPE_WEBHOOK_SECRET missing in production mode");
+    return res.status(500).json({ error: "Stripe webhook secret not configured" });
   } else {
     console.log(
       `[Stripe Webhook MOCK] STRIPE_WEBHOOK_SECRET not set, processing event in mock mode: ${req.body?.type || "unknown"}`
