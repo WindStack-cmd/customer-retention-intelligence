@@ -120,6 +120,7 @@ data/processed/
 data/recovery/
 data/synthetic/
 *.csv
+!server/fixtures/*.csv
 *.joblib
 *.pkl
 *.pickle

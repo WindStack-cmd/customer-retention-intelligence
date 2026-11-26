@@ -194,7 +194,9 @@ export function getCohortRetentionHeatmap(
   tenantId: string = "ws_default"
 ): CohortHeatmapResult {
   const recoveryDir = path.resolve(process.env.RECOVERY_DIR ?? "data/recovery");
-  const ordersPath = path.join(recoveryDir, ORDERS_FILE_NAME);
+  const ordersPath = process.env.ORDERS_CSV_PATH
+    ? path.resolve(process.env.ORDERS_CSV_PATH)
+    : path.join(recoveryDir, ORDERS_FILE_NAME);
 
   if (tenantId === "ws_default") {
     if (!fs.existsSync(ordersPath)) {

@@ -3,7 +3,9 @@ import { join } from "node:path";
 
 async function validate(): Promise<void> {
   const root = process.cwd();
-  const schema = await readFile(join(root, "drizzle", "schema.ts"), "utf8");
+  const schema = (
+    await readFile(join(root, "drizzle", "schema.ts"), "utf8")
+  ).replace(/\r\n/g, "\n");
   const journal = JSON.parse(
     await readFile(join(root, "drizzle", "meta", "_journal.json"), "utf8")
   ) as { entries?: Array<{ idx: number; tag: string }> };

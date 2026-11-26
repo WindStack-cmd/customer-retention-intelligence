@@ -173,9 +173,16 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
 
   it("generates cohort retention heatmap, shap waterfall, and journey timeline", () => {
     const heatmap = getCohortRetentionHeatmap(testWsId);
-    expect(heatmap.cohorts.length).toBeGreaterThanOrEqual(10);
+    expect(heatmap.cohorts.length).toBeGreaterThanOrEqual(12);
+    expect(heatmap.cohorts[0].cohortMonth).toBe("2025-01");
+    expect(heatmap.cohorts[0].customersCount).toBe(4);
     expect(heatmap.cohorts[0].retentionRates.length).toBe(13); // Full M0 through M12
     expect(heatmap.cohorts[0].retentionRates[0]).toBe(100);
+    expect(heatmap.cohorts[0].retentionRates[1]).toBe(50); // 2 of 4 returned in M1
+    expect(heatmap.cohorts[0].retentionRates[12]).toBe(25); // 1 of 4 returned in M12
+    const latestCohort = heatmap.cohorts[heatmap.cohorts.length - 1];
+    expect(latestCohort.retentionRates[0]).toBe(100);
+    expect(latestCohort.retentionRates.slice(1).every(r => r === null)).toBe(true);
     expect(heatmap.averageRetention.length).toBe(13);
     expect(heatmap.isSampleData).toBe(false);
     expect(heatmap.isMissing).toBe(false);
@@ -186,21 +193,30 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
     expect(emptyWsHeatmap.isSampleData).toBe(true);
     expect(emptyWsHeatmap.emptyMessage).toContain("No transaction records");
 
-    // Missing orders file handled gracefully without crashing
-    const originalRecoveryDir = process.env.RECOVERY_DIR;
-    process.env.RECOVERY_DIR = "data/non_existent_recovery_dir";
-    const missingFileHeatmap = getCohortRetentionHeatmap("ws_default");
-    expect(missingFileHeatmap.isMissing).toBe(true);
-    expect(missingFileHeatmap.cohorts.length).toBe(0);
-    expect(missingFileHeatmap.emptyMessage).toContain("missing or unavailable");
-    process.env.RECOVERY_DIR = originalRecoveryDir;
-
     const shap = getShapWaterfall(17850, testWsId);
     expect(shap.features.length).toBeGreaterThan(0);
     expect(shap.baseValue).toBeGreaterThan(0);
 
     const timeline = getJourneyTimeline(17850, testWsId);
     expect(timeline.length).toBeGreaterThan(0);
+  });
+
+  it("handles missing ORDERS_CSV_PATH gracefully with empty state without throwing", () => {
+    const originalOrdersPath = process.env.ORDERS_CSV_PATH;
+    try {
+      process.env.ORDERS_CSV_PATH = "server/fixtures/non_existent_orders.csv";
+      const missingFileHeatmap = getCohortRetentionHeatmap("ws_default");
+      expect(missingFileHeatmap.isMissing).toBe(true);
+      expect(missingFileHeatmap.cohorts).toEqual([]);
+      expect(missingFileHeatmap.averageRetention).toEqual([]);
+      expect(missingFileHeatmap.emptyMessage).toContain("missing or unavailable");
+    } finally {
+      if (originalOrdersPath === undefined) {
+        delete process.env.ORDERS_CSV_PATH;
+      } else {
+        process.env.ORDERS_CSV_PATH = originalOrdersPath;
+      }
+    }
   });
 
   it("handles billing tiers and simulated checkout upgrade", async () => {
