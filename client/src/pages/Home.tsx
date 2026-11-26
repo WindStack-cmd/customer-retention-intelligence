@@ -335,6 +335,9 @@ export default function Home() {
   }, [searchDraft]);
 
   const enabled = Boolean(user);
+  const canViewCustomers = isAdmin || isCsm;
+  const canViewAnalyst = !isViewer;
+
   const overview = trpc.analytics.executiveOverview.useQuery(undefined, {
     enabled,
     retry: false,
@@ -351,19 +354,22 @@ export default function Home() {
             ? 0.65
             : undefined,
     },
-    { enabled, retry: false }
+    { enabled: enabled && canViewCustomers, retry: false }
   );
   const recommendations = trpc.analytics.recommendations.useQuery(
     { page: 1, pageSize: 5 },
-    { enabled, retry: false }
+    { enabled: enabled && canViewCustomers, retry: false }
   );
   const detail = trpc.analytics.customerDetail.useQuery(
     { customerId: selectedCustomer ?? 1 },
-    { enabled: enabled && selectedCustomer !== null, retry: false }
+    { enabled: enabled && canViewCustomers && selectedCustomer !== null, retry: false }
   );
 
   const { data: analystQuota, refetch: refetchQuota } =
-    trpc.analyst.quota.useQuery(undefined, { enabled });
+    trpc.analyst.quota.useQuery(undefined, {
+      enabled: enabled && canViewAnalyst,
+      retry: false,
+    });
 
   const analyst = trpc.analyst.ask.useMutation({
     onSuccess: result => {
@@ -724,10 +730,11 @@ export default function Home() {
             </section>
           )}
 
-          <section
-            id="analyst"
-            className="mt-5 rounded-2xl border border-border bg-card p-5 shadow-2xl sm:p-6"
-          >
+          {canViewAnalyst && (
+            <section
+              id="analyst"
+              className="mt-5 rounded-2xl border border-border bg-card p-5 shadow-2xl sm:p-6"
+            >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
@@ -767,9 +774,12 @@ export default function Home() {
               ]}
               className="border-border bg-surface-2"
             />
-          </section>
+            </section>
+          )}
 
-          <section className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
+          {canViewCustomers && (
+            <>
+              <section className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
             <div
               id="recommendations"
               className="rounded-2xl border border-border bg-card p-5 shadow-2xl sm:p-6"
@@ -1035,6 +1045,8 @@ export default function Home() {
               </div>
             </div>
           </section>
+            </>
+          )}
 
           {/* Phase 3: Retention Outcome & ROI Tracking */}
           <section id="roi" className="mt-8">
