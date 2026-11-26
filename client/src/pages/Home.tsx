@@ -123,10 +123,12 @@ export default function Home() {
     retry: false,
   });
   const memberRole = currentWorkspaceQuery.data?.role;
-  const isAdminOrCsm =
-    user?.role === "admin" ||
-    memberRole === "admin" ||
-    memberRole === "csm";
+  const isAdmin = user?.role === "admin" || memberRole === "admin";
+  const isCsm = memberRole === "csm";
+  const isViewer = memberRole === "viewer";
+  const displayedMainNavItems = isViewer
+    ? mainNavItems.filter(item => item.id !== "metadata")
+    : mainNavItems;
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -241,7 +243,7 @@ export default function Home() {
       const viewportHeight = window.innerHeight;
       const documentHeight = document.documentElement.scrollHeight;
 
-      const activeNavPool = isAdminOrCsm ? allNavItems : mainNavItems;
+      const activeNavPool = isAdmin ? allNavItems : displayedMainNavItems;
       const sectionElements = activeNavPool
         .map(item => document.getElementById(item.id))
         .filter((el): el is HTMLElement => el !== null);
@@ -315,7 +317,7 @@ export default function Home() {
         window.clearTimeout(clickLockTimeoutRef.current);
       }
     };
-  }, [unlockClick, isAdminOrCsm]);
+  }, [unlockClick, isAdmin, isViewer]);
   const [analystMessages, setAnalystMessages] = useState<AnalystMessage[]>([
     {
       role: "assistant",
@@ -462,7 +464,7 @@ export default function Home() {
           <WorkspaceSwitcher />
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="Main navigation">
-          {mainNavItems.map(item => {
+          {displayedMainNavItems.map(item => {
             const isActive = activeNav === item.id;
             return (
               <a
@@ -486,7 +488,7 @@ export default function Home() {
             );
           })}
 
-          {isAdminOrCsm && (
+          {isAdmin && (
             <div className="pt-4">
               <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[.2em] text-subtle-foreground">
                 Admin
@@ -589,7 +591,7 @@ export default function Home() {
               <WorkspaceSwitcher />
             </div>
             <div className="space-y-1 max-h-80 overflow-y-auto">
-              {mainNavItems.map(item => {
+              {displayedMainNavItems.map(item => {
                 const isActive = activeNav === item.id;
                 return (
                   <a
@@ -613,7 +615,7 @@ export default function Home() {
                 );
               })}
 
-              {isAdminOrCsm && (
+              {isAdmin && (
                 <div className="pt-3">
                   <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[.2em] text-subtle-foreground">
                     Admin
@@ -1044,39 +1046,44 @@ export default function Home() {
             <CohortHeatmap />
           </section>
 
-          {/* Phase 2: Ingestion & Connectors */}
-          <section id="integrations" className="mt-8">
-            <IntegrationsSection />
-          </section>
+          {/* Phase 2: Ingestion & Connectors, Team, Billing - Admin only */}
+          {isAdmin && (
+            <>
+              <section id="integrations" className="mt-8">
+                <IntegrationsSection />
+              </section>
 
-          {/* Phase 1: Team & Access Control */}
-          <section id="team" className="mt-8">
-            <TeamManagement />
-          </section>
+              <section id="team" className="mt-8">
+                <TeamManagement />
+              </section>
 
-          {/* Phase 4: Billing, Security, & Compliance */}
-          <section id="billing" className="mt-8">
-            <BillingAndSecuritySection />
-          </section>
+              <section id="billing" className="mt-8">
+                <BillingAndSecuritySection />
+              </section>
+            </>
+          )}
 
-          <section
-            id="metadata"
-            className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-5 py-4 text-[11px] text-muted-foreground sm:px-6"
-          >
-            <div className="flex items-center gap-2">
-              <Database className="h-4 w-4 text-primary-text" />
-              <span>Dataset: {metadata?.datasetName ?? "Unavailable"}</span>
-              <span className="text-subtle-foreground">·</span>
-              <span>Model: {metadata?.modelVersion ?? "Unavailable"}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span>
-                Feature version: {metadata?.featureVersion ?? "Unavailable"}
-              </span>
-              <span className="text-subtle-foreground">·</span>
-              <span>Cutoff: {formatDate(metadata?.cutoffAt ?? null)}</span>
-            </div>
-          </section>
+          {/* Data & model provenance - Kept for Admin, CSM, Analyst; hidden for Viewer */}
+          {!isViewer && (
+            <section
+              id="metadata"
+              className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-5 py-4 text-[11px] text-muted-foreground sm:px-6"
+            >
+              <div className="flex items-center gap-2">
+                <Database className="h-4 w-4 text-primary-text" />
+                <span>Dataset: {metadata?.datasetName ?? "Unavailable"}</span>
+                <span className="text-subtle-foreground">·</span>
+                <span>Model: {metadata?.modelVersion ?? "Unavailable"}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span>
+                  Feature version: {metadata?.featureVersion ?? "Unavailable"}
+                </span>
+                <span className="text-subtle-foreground">·</span>
+                <span>Cutoff: {formatDate(metadata?.cutoffAt ?? null)}</span>
+              </div>
+            </section>
+          )}
         </main>
       </div>
 

@@ -134,7 +134,7 @@ export const appRouter = router({
         return updated;
       }),
 
-    members: workspaceProcedure.query(({ ctx }) => {
+    members: adminProcedure.query(({ ctx }) => {
       return tenantStorage.listMembers(ctx.workspace.id);
     }),
 
@@ -301,7 +301,7 @@ export const appRouter = router({
 
   // Phase 2: Ingestion, Connectors, & Scoring Runner
   integrations: router({
-    status: workspaceProcedure.query(({ ctx }) => {
+    status: adminProcedure.query(({ ctx }) => {
       const config = tenantStorage.getIntegrationConfig(ctx.workspace.id);
       return {
         stripe: config.stripe,
@@ -809,9 +809,9 @@ export const appRouter = router({
 
   // Phase 4: Billing, Security, & Compliance
   billing: router({
-    plans: workspaceProcedure.query(() => Object.values(BILLING_PLANS)),
+    plans: adminProcedure.query(() => Object.values(BILLING_PLANS)),
 
-    subscription: workspaceProcedure.query(({ ctx }) => {
+    subscription: adminProcedure.query(({ ctx }) => {
       const plan = BILLING_PLANS[ctx.workspace.plan] || BILLING_PLANS.pro;
       const customers = tenantStorage.getTenantCustomers(ctx.workspace.id);
       const customerCount = ctx.workspace.id === "ws_default" ? 4122 : customers.length;

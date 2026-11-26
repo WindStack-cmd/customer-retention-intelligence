@@ -118,12 +118,13 @@ describe("Phase 1: Multi-Tenancy & RBAC", () => {
       role: "viewer",
     });
 
-    // Viewer cannot invite
+    // Viewer cannot invite, query members, integrations status, billing subscription, or execute playbooks
     await expect(
       viewerCaller.workspace.invite({ email: "new@test.com", role: "viewer" })
     ).rejects.toThrow();
-
-    // Viewer cannot execute playbooks
+    await expect(viewerCaller.workspace.members()).rejects.toThrow();
+    await expect(viewerCaller.integrations.status()).rejects.toThrow();
+    await expect(viewerCaller.billing.subscription()).rejects.toThrow();
     await expect(
       viewerCaller.actions.executePlaybook({
         customerId: 17850,
@@ -132,7 +133,33 @@ describe("Phase 1: Multi-Tenancy & RBAC", () => {
       })
     ).rejects.toThrow();
 
-    // 2. CSM caller
+    // Viewer CAN access workspace current
+    const viewerWs = await viewerCaller.workspace.current();
+    expect(viewerWs.role).toBe("viewer");
+
+    // 2. Analyst caller
+    const analystCaller = appRouter.createCaller({
+      req: {} as any,
+      res: {} as any,
+      user: { id: 303, openId: "analyst-1", name: "Analyst", role: "user", email: "analyst@test.com" } as any,
+      workspace: ws,
+      membership: { id: 12, workspaceId: ws.id, userId: 303, role: "analyst", createdAt: new Date(), updatedAt: new Date() },
+      role: "analyst",
+    });
+
+    // Analyst cannot access admin-only integrations, team, or billing, nor execute playbooks
+    await expect(analystCaller.workspace.members()).rejects.toThrow();
+    await expect(analystCaller.integrations.status()).rejects.toThrow();
+    await expect(analystCaller.billing.subscription()).rejects.toThrow();
+    await expect(
+      analystCaller.actions.executePlaybook({
+        customerId: 17850,
+        sourceCustomerId: "CUST17850",
+        playbookType: "VIP Concierge Check-in",
+      })
+    ).rejects.toThrow();
+
+    // 3. CSM caller
     const csmCaller = appRouter.createCaller({
       req: {} as any,
       res: {} as any,
@@ -149,6 +176,10 @@ describe("Phase 1: Multi-Tenancy & RBAC", () => {
     await expect(
       csmCaller.integrations.createApiKey({ name: "Hacker Key" })
     ).rejects.toThrow();
+    // CSM cannot access admin-only integrations status, team members, or billing subscription
+    await expect(csmCaller.workspace.members()).rejects.toThrow();
+    await expect(csmCaller.integrations.status()).rejects.toThrow();
+    await expect(csmCaller.billing.subscription()).rejects.toThrow();
 
     // CSM can execute playbooks
     const playbookRes = await csmCaller.actions.executePlaybook({
@@ -159,7 +190,7 @@ describe("Phase 1: Multi-Tenancy & RBAC", () => {
     });
     expect(playbookRes.success).toBe(true);
 
-    // 3. Admin caller can invite and create API keys
+    // 4. Admin caller can access all: invite, members, integrations, billing
     const adminCaller = appRouter.createCaller({
       req: {} as any,
       res: {} as any,
@@ -168,6 +199,13 @@ describe("Phase 1: Multi-Tenancy & RBAC", () => {
       membership: { id: 1, workspaceId: ws.id, userId: 300, role: "admin", createdAt: new Date(), updatedAt: new Date() },
       role: "admin",
     });
+
+    const membersRes = await adminCaller.workspace.members();
+    expect(Array.isArray(membersRes)).toBe(true);
+    const intStatus = await adminCaller.integrations.status();
+    expect(intStatus.inboundApi.status).toBe("active");
+    const subRes = await adminCaller.billing.subscription();
+    expect(subRes.status).toBeDefined();
 
     const inviteRes = await adminCaller.workspace.invite({
       email: "invited-by-admin@test.com",

@@ -29,6 +29,8 @@ export function CustomerDrawerEnhancements({
   const { data: shapData } = trpc.analytics.shapWaterfall.useQuery({ customerId });
   const { data: notes } = trpc.actions.notes.useQuery({ customerId });
   const { data: playbooks } = trpc.actions.playbooks.useQuery();
+  const { data: currentWs } = trpc.workspace.current.useQuery();
+  const isViewer = currentWs?.role === "viewer";
 
   const addNoteMutation = trpc.actions.addNote.useMutation({
     onSuccess: () => {
@@ -73,7 +75,7 @@ export function CustomerDrawerEnhancements({
           { id: "journey", label: "Journey Timeline", icon: Clock },
           { id: "shap", label: "SHAP Waterfall", icon: Sparkles },
           { id: "notes", label: `Notes (${notes?.length || 0})`, icon: MessageSquare },
-          { id: "playbook", label: "Trigger Playbook", icon: Send },
+          ...(!isViewer ? [{ id: "playbook", label: "Trigger Playbook", icon: Send }] : []),
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -173,25 +175,31 @@ export function CustomerDrawerEnhancements({
       {/* Tab 3: Customer Notes */}
       {activeTab === "notes" && (
         <div className="space-y-4">
-          <form onSubmit={handleAddNote} className="space-y-2">
-            <textarea
-              required
-              rows={2}
-              placeholder="Add CSM note (e.g. Discussed renewal discounts with CFO...)"
-              value={newNote}
-              onChange={(e) => setNewNote(e.target.value)}
-              className="w-full rounded-xl border border-border bg-background p-3 text-xs text-foreground placeholder:text-subtle-foreground focus:border-primary focus:outline-none"
-            />
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={addNoteMutation.isPending}
-                className="rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:brightness-110 disabled:opacity-50"
-              >
-                {addNoteMutation.isPending ? "Saving..." : "Add Note"}
-              </button>
+          {isViewer ? (
+            <div className="rounded-xl border border-border bg-card/60 p-3 text-xs text-muted-foreground">
+              Viewer role: read-only access to customer notes.
             </div>
-          </form>
+          ) : (
+            <form onSubmit={handleAddNote} className="space-y-2">
+              <textarea
+                required
+                rows={2}
+                placeholder="Add CSM note (e.g. Discussed renewal discounts with CFO...)"
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                className="w-full rounded-xl border border-border bg-background p-3 text-xs text-foreground placeholder:text-subtle-foreground focus:border-primary focus:outline-none"
+              />
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={addNoteMutation.isPending}
+                  className="rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:brightness-110 disabled:opacity-50"
+                >
+                  {addNoteMutation.isPending ? "Saving..." : "Add Note"}
+                </button>
+              </div>
+            </form>
+          )}
 
           <div className="space-y-2">
             {notes?.length === 0 ? (
