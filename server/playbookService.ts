@@ -134,6 +134,7 @@ export async function dispatchAlert(
 ): Promise<{ success: boolean; status: "dispatched" | "simulated"; detail: string }> {
   // 1. HubSpot CRM Task API
   if (payload.channel === "hubspot") {
+    const isProduction = process.env.NODE_ENV === "production";
     const token = process.env.HUBSPOT_ACCESS_TOKEN;
     if (token && !token.includes("placeholder")) {
       try {
@@ -163,6 +164,13 @@ export async function dispatchAlert(
         console.warn("[AlertService] HubSpot API error, falling back to mock:", err);
       }
     }
+    if (isProduction) {
+      return {
+        success: false,
+        status: "simulated",
+        detail: "HubSpot credentials not configured in production",
+      };
+    }
     console.log(
       `[CRM Alert MOCK] Created Task for Account ${payload.sourceCustomerId} (HubSpot: Priority High, Risk: ${(payload.riskProbability * 100).toFixed(0)}%)`
     );
@@ -175,6 +183,7 @@ export async function dispatchAlert(
 
   // 2. Salesforce CRM Task API
   if (payload.channel === "salesforce") {
+    const isProduction = process.env.NODE_ENV === "production";
     const token = process.env.SALESFORCE_ACCESS_TOKEN;
     const instanceUrl = process.env.SALESFORCE_INSTANCE_URL || "https://login.salesforce.com";
     if (token && !token.includes("placeholder")) {
@@ -203,6 +212,13 @@ export async function dispatchAlert(
         console.warn("[AlertService] Salesforce API error, falling back to mock:", err);
       }
     }
+    if (isProduction) {
+      return {
+        success: false,
+        status: "simulated",
+        detail: "Salesforce credentials not configured in production",
+      };
+    }
     console.log(
       `[CRM Alert MOCK] Created Task for Account ${payload.sourceCustomerId} (Salesforce: Priority High, Risk: ${(payload.riskProbability * 100).toFixed(0)}%)`
     );
@@ -214,7 +230,7 @@ export async function dispatchAlert(
   }
 
   // 3. Webhook / Slack
-  if (payload.webhookUrl && payload.webhookUrl.startsWith("http")) {
+  if (payload.webhookUrl && payload.webhookUrl.startsWith("http") && !payload.webhookUrl.includes("MOCK")) {
     try {
       const res = await fetch(payload.webhookUrl, {
         method: "POST",
@@ -234,6 +250,14 @@ export async function dispatchAlert(
     } catch (err) {
       console.warn(`[AlertService] Failed to dispatch to ${payload.webhookUrl}:`, err);
     }
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    return {
+      success: false,
+      status: "simulated",
+      detail: `${payload.channel} webhook not configured in production`,
+    };
   }
 
   // Simulated notification fallback

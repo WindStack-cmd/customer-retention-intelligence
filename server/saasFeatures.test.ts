@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, afterEach } from "vitest";
 import { tenantStorage } from "./tenantStorage";
 import { executeScoringRun } from "./scoringRunner";
 import { sendPlaybookEmail, dispatchAlert } from "./playbookService";
@@ -502,5 +502,77 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
 
     expect(res.status).toBe(501);
     expect(res.body.error).toBe("SSO login not enabled");
+  });
+
+  describe("Production Mode Mock Disabling & Guard Policy", () => {
+    const originalEnv = { ...process.env };
+
+    afterEach(() => {
+      process.env = { ...originalEnv };
+    });
+
+    it("fails checkout with 'Billing not configured' and does not change plan in production when stripe key is missing", async () => {
+      process.env.NODE_ENV = "production";
+      delete process.env.STRIPE_SECRET_KEY;
+
+      const ws = tenantStorage.createWorkspace({
+        name: "Prod Billing Test WS",
+        plan: "starter",
+        userId: 999,
+      });
+      expect(ws.plan).toBe("starter");
+
+      await expect(
+        createCheckoutSession({
+          workspaceId: ws.id,
+          planId: "enterprise",
+          returnUrl: "http://localhost:3000",
+        })
+      ).rejects.toThrow("Billing not configured");
+
+      // Verify plan is UNCHANGED
+      const fetched = tenantStorage.getWorkspace(ws.id);
+      expect(fetched?.plan).toBe("starter");
+      expect(fetched?.customerLimit).toBe(1000);
+    });
+
+    it("returns 'Not connected' (connected: false) for integrations in production without credentials", () => {
+      process.env.NODE_ENV = "production";
+      delete process.env.STRIPE_SECRET_KEY;
+      delete process.env.SHOPIFY_API_KEY;
+      delete process.env.SLACK_WEBHOOK_URL;
+      delete process.env.HUBSPOT_ACCESS_TOKEN;
+      delete process.env.SALESFORCE_ACCESS_TOKEN;
+
+      const config = tenantStorage.getIntegrationConfig(testWsId);
+      expect(config.stripe.connected).toBe(false);
+      expect(config.shopify.connected).toBe(false);
+      expect(config.slack.connected).toBe(false);
+      expect(config.crm.connected).toBe(false);
+    });
+
+    it("allows labelled mock mode in development environment", async () => {
+      process.env.NODE_ENV = "development";
+      delete process.env.STRIPE_SECRET_KEY;
+
+      const devWs = tenantStorage.createWorkspace({
+        name: "Dev Billing WS",
+        plan: "starter",
+        userId: 998,
+      });
+
+      const checkout = await createCheckoutSession({
+        workspaceId: devWs.id,
+        planId: "enterprise",
+        returnUrl: "http://localhost:3000",
+      });
+      expect(checkout.mode).toBe("mock");
+
+      const config = tenantStorage.getIntegrationConfig(devWs.id);
+      expect(config.stripe.connected).toBe(true);
+      expect(config.stripe.mode).toBe("mock");
+      expect(config.shopify.connected).toBe(true);
+      expect(config.shopify.mode).toBe("mock");
+    });
   });
 });

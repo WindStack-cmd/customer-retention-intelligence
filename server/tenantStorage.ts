@@ -1149,22 +1149,48 @@ class TenantStorage {
       (this.data.integrationsConfig &&
         this.data.integrationsConfig[workspaceId]) ||
       {};
+    const isProduction = process.env.NODE_ENV === "production";
     const hasStripeEnv = Boolean(
       process.env.STRIPE_SECRET_KEY &&
         !process.env.STRIPE_SECRET_KEY.includes("placeholder")
     );
-    const hasShopifyEnv = Boolean(process.env.SHOPIFY_API_KEY);
+    const hasShopifyEnv = Boolean(
+      process.env.SHOPIFY_API_KEY &&
+        !process.env.SHOPIFY_API_KEY.includes("placeholder")
+    );
+    const hasSlackEnv = Boolean(
+      process.env.SLACK_WEBHOOK_URL &&
+        !process.env.SLACK_WEBHOOK_URL.includes("placeholder")
+    );
+    const hasCrmEnv = Boolean(
+      (process.env.HUBSPOT_ACCESS_TOKEN &&
+        !process.env.HUBSPOT_ACCESS_TOKEN.includes("placeholder")) ||
+        (process.env.SALESFORCE_ACCESS_TOKEN &&
+          !process.env.SALESFORCE_ACCESS_TOKEN.includes("placeholder"))
+    );
 
     return {
       stripe: wsConfig.stripe || {
-        connected: true,
+        connected: isProduction ? hasStripeEnv : true,
         mode: hasStripeEnv ? "live" : "mock",
-        lastSyncAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
+        lastSyncAt: !isProduction || hasStripeEnv
+          ? new Date(Date.now() - 48 * 3600 * 1000).toISOString()
+          : undefined,
       },
       shopify: wsConfig.shopify || {
-        connected: true,
+        connected: isProduction ? hasShopifyEnv : true,
         mode: hasShopifyEnv ? "live" : "mock",
-        lastSyncAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
+        lastSyncAt: !isProduction || hasShopifyEnv
+          ? new Date(Date.now() - 24 * 3600 * 1000).toISOString()
+          : undefined,
+      },
+      slack: wsConfig.slack || {
+        connected: isProduction ? hasSlackEnv : true,
+        mode: hasSlackEnv ? "live" : "mock",
+      },
+      crm: wsConfig.crm || {
+        connected: isProduction ? hasCrmEnv : true,
+        mode: hasCrmEnv ? "live" : "mock",
       },
     };
   }
