@@ -230,7 +230,7 @@ function loadInitialData(): TenantCacheData {
   };
 }
 
-import { getDb } from "./db";
+import { getDb, isDbConnectionSkipped, recordDbFailure } from "./db";
 import {
   workspaces,
   workspaceMembers,
@@ -270,12 +270,16 @@ class TenantStorage {
   }
 
   private async persistToDb<T>(table: any, values: any) {
+    if (isDbConnectionSkipped()) {
+      return;
+    }
     try {
       const db = await getDb();
       if (db) {
         await db.insert(table).values(values);
       }
     } catch (err) {
+      recordDbFailure(err);
       if (process.env.NODE_ENV === "production") {
         console.error("[TenantStorage DB Write Failure]", err);
         throw err;
