@@ -24,7 +24,10 @@ export function BillingAndSecuritySection() {
 
   const [gdprCustomerId, setGdprCustomerId] = useState("");
   const [gdprMessage, setGdprMessage] = useState<string | null>(null);
-  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
+  const [upgradeMessage, setUpgradeMessage] = useState<{
+    text: string;
+    isError?: boolean;
+  } | null>(null);
 
   // SSO / SAML State
   const [ssoProvider, setSsoProvider] = useState<"google" | "microsoft" | "okta">("okta");
@@ -58,7 +61,9 @@ export function BillingAndSecuritySection() {
   const checkoutMutation = trpc.billing.createCheckout.useMutation({
     onSuccess: (res) => {
       if (res.mode === "mock") {
-        setUpgradeMessage("Subscription tier updated successfully in simulated mode!");
+        setUpgradeMessage({
+          text: "Subscription tier updated successfully in simulated mode!",
+        });
         utils.billing.subscription.invalidate();
         utils.workspace.current.invalidate();
         setTimeout(() => setUpgradeMessage(null), 5000);
@@ -67,7 +72,10 @@ export function BillingAndSecuritySection() {
       }
     },
     onError: (err) => {
-      setUpgradeMessage(err.message);
+      setUpgradeMessage({
+        text: err.message || "Billing not configured",
+        isError: true,
+      });
       setTimeout(() => setUpgradeMessage(null), 6000);
     },
   });
@@ -106,9 +114,20 @@ export function BillingAndSecuritySection() {
       </div>
 
       {upgradeMessage && (
-        <div className="rounded-xl border border-primary/30 bg-primary/10 p-3 text-xs text-primary flex items-center gap-2">
-          <Sparkles className="h-4 w-4 shrink-0" />
-          <span>{upgradeMessage}</span>
+        <div
+          role={upgradeMessage.isError ? "alert" : "status"}
+          className={`rounded-xl border p-3 text-xs flex items-center gap-2 ${
+            upgradeMessage.isError
+              ? "border-status-urgent-border bg-status-urgent-bg text-status-urgent-text"
+              : "border-primary/30 bg-primary/10 text-primary"
+          }`}
+        >
+          {upgradeMessage.isError ? (
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+          ) : (
+            <Sparkles className="h-4 w-4 shrink-0" />
+          )}
+          <span>{upgradeMessage.text}</span>
         </div>
       )}
 

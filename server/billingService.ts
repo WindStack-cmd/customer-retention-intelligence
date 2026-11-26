@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { tenantStorage } from "./tenantStorage";
 import { isDevLike } from "./_core/env";
 
@@ -65,7 +66,10 @@ export async function createCheckoutSession(params: {
   if (!workspace) throw new Error("Workspace not found");
 
   if (isProduction && !hasStripeKey) {
-    throw new Error("Billing not configured");
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Billing not configured",
+    });
   }
 
   if (hasStripeKey) {
@@ -126,7 +130,10 @@ export async function createPortalSession(params: {
   const hasStripeKey = Boolean(stripeKey && !stripeKey.includes("placeholder"));
 
   if (isProduction && !hasStripeKey) {
-    throw new Error("Billing not configured");
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Billing not configured",
+    });
   }
 
   return {

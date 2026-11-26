@@ -545,7 +545,38 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
           planId: "enterprise",
           returnUrl: "http://localhost:3000",
         })
-      ).rejects.toThrow("Billing not configured");
+      ).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        message: "Billing not configured",
+      });
+
+      const adminCaller = appRouter.createCaller({
+        req: {} as any,
+        res: {} as any,
+        user: { id: 999, openId: "admin", name: "Admin", role: "admin", email: "admin@test.com" } as any,
+        workspace: ws,
+        membership: { id: 1, workspaceId: ws.id, userId: 999, role: "admin" } as any,
+        role: "admin",
+      });
+
+      await expect(
+        adminCaller.billing.createCheckout({
+          planId: "enterprise",
+          returnUrl: "http://localhost:3000",
+        })
+      ).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        message: "Billing not configured",
+      });
+
+      await expect(
+        adminCaller.billing.createPortal({
+          returnUrl: "http://localhost:3000",
+        })
+      ).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        message: "Billing not configured",
+      });
 
       // Verify plan is UNCHANGED
       const fetched = tenantStorage.getWorkspace(ws.id);
