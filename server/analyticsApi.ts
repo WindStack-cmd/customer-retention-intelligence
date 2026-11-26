@@ -1,5 +1,6 @@
-import mysql, { type RowDataPacket } from "mysql2/promise";
-import { isDbConnectionSkipped, recordDbFailure } from "./db";
+import { type RowDataPacket } from "mysql2/promise";
+import type mysql from "mysql2/promise";
+import { createFailFastMysqlConnection, isDbConnectionSkipped } from "./db";
 import { z } from "zod";
 import {
   executiveOverviewFallback,
@@ -58,25 +59,11 @@ async function connection(): Promise<mysql.Connection> {
   }
   if (!process.env.DATABASE_URL) throw new Error("Database is not configured");
 
-  try {
-    const conn = await Promise.race([
-      mysql.createConnection({
-        uri: process.env.DATABASE_URL,
-        connectTimeout: 2000,
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error("MySQL connection timeout (2000ms)")),
-          2000
-        )
-      ),
-    ]);
-    await conn.ping();
-    return conn;
-  } catch (err) {
-    recordDbFailure(err);
-    throw err;
+  const conn = await createFailFastMysqlConnection();
+  if (!conn) {
+    throw new Error("MySQL connection unavailable (fail-fast fallback active)");
   }
+  return conn;
 }
 
 async function query<T extends DbRow = DbRow>(

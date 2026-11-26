@@ -36,17 +36,13 @@ export function resetDbFailureCooldown(): void {
   _db = null;
 }
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
-// When MySQL is unreachable, uses a ~2s connect timeout and remembers failure for 60s.
-export async function getDb() {
+// Shared fail-fast MySQL connection helper (2s timeout, 60s failure cooldown).
+export async function createFailFastMysqlConnection(): Promise<mysql.Connection | null> {
   if (isDbConnectionSkipped()) {
     return null;
   }
   if (!process.env.DATABASE_URL) {
     return null;
-  }
-  if (_db) {
-    return _db;
   }
 
   try {
@@ -66,14 +62,34 @@ export async function getDb() {
       ),
     ]);
     await conn.ping();
-    await conn.end().catch(() => {});
-    _db = drizzle(process.env.DATABASE_URL);
     lastDbFailureTime = 0;
-    return _db;
+    return conn;
   } catch (error) {
     recordDbFailure(error);
     return null;
   }
+}
+
+// Lazily create the drizzle instance so local tooling can run without a DB.
+// When MySQL is unreachable, uses a ~2s connect timeout and remembers failure for 60s.
+export async function getDb() {
+  if (isDbConnectionSkipped()) {
+    return null;
+  }
+  if (!process.env.DATABASE_URL) {
+    return null;
+  }
+  if (_db) {
+    return _db;
+  }
+
+  const conn = await createFailFastMysqlConnection();
+  if (!conn) {
+    return null;
+  }
+  await conn.end().catch(() => {});
+  _db = drizzle(process.env.DATABASE_URL);
+  return _db;
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
