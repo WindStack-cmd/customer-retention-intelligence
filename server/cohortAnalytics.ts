@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { getRowsForTenant } from "./recoveryFallback";
 import { tenantStorage } from "./tenantStorage";
 
@@ -24,48 +26,235 @@ export interface JourneyEvent {
   badge?: string;
 }
 
-/**
- * Returns cohort retention heatmap (M0 to M12) based on real customer order transaction history.
- * Unobserved future periods beyond the dataset cutoff date (9 Nov 2011) remain null (empty).
- */
-export function getCohortRetentionHeatmap(_tenantId: string = "ws_default"): {
+const ORDERS_FILE_NAME = "orders_20261024_053459.csv";
+
+export interface CohortHeatmapResult {
   cohorts: CohortRow[];
   averageRetention: (number | null)[];
-  cutoffDate: string;
-} {
-  // Real cohort retention computed from order transaction history (Dec 2010 to Nov 2011 cutoff)
-  const cohorts: CohortRow[] = [
-    { cohortMonth: "2010-12", customersCount: 885, retentionRates: [100, 36.6, 32.3, 38.4, 36.3, 39.8, 36.3, 34.9, 35.4, 39.5, 37.4, 50.3, null] },
-    { cohortMonth: "2011-01", customersCount: 417, retentionRates: [100, 22.1, 26.6, 23.0, 32.1, 28.8, 24.7, 24.2, 30.0, 32.6, 36.5, null, null] },
-    { cohortMonth: "2011-02", customersCount: 380, retentionRates: [100, 18.7, 18.7, 28.4, 27.1, 24.7, 25.3, 27.9, 24.7, 30.5, null, null, null] },
-    { cohortMonth: "2011-03", customersCount: 452, retentionRates: [100, 15.0, 25.2, 19.9, 22.3, 16.8, 26.8, 23.0, 27.9, null, null, null, null] },
-    { cohortMonth: "2011-04", customersCount: 300, retentionRates: [100, 21.3, 20.3, 21.0, 19.7, 22.7, 21.7, 26.0, null, null, null, null, null] },
-    { cohortMonth: "2011-05", customersCount: 284, retentionRates: [100, 19.0, 17.3, 17.3, 20.8, 23.2, 26.4, null, null, null, null, null, null] },
-    { cohortMonth: "2011-06", customersCount: 242, retentionRates: [100, 17.4, 15.7, 26.4, 23.1, 33.5, null, null, null, null, null, null, null] },
-    { cohortMonth: "2011-07", customersCount: 188, retentionRates: [100, 18.1, 20.7, 22.3, 27.1, null, null, null, null, null, null, null, null] },
-    { cohortMonth: "2011-08", customersCount: 169, retentionRates: [100, 20.7, 24.9, 24.3, null, null, null, null, null, null, null, null, null] },
-    { cohortMonth: "2011-09", customersCount: 299, retentionRates: [100, 23.4, 30.1, null, null, null, null, null, null, null, null, null, null] },
-    { cohortMonth: "2011-10", customersCount: 358, retentionRates: [100, 24.0, null, null, null, null, null, null, null, null, null, null, null] },
-    { cohortMonth: "2011-11", customersCount: 324, retentionRates: [100, null, null, null, null, null, null, null, null, null, null, null, null] },
-  ];
+  cutoffDate: string | null;
+  isMissing?: boolean;
+  isSampleData?: boolean;
+  totalCustomers?: number;
+  emptyMessage?: string;
+}
 
-  const averageRetention = [
-    100,
-    21.5,
-    23.2,
-    24.6,
-    26.1,
-    27.1,
-    26.9,
-    27.2,
-    29.5,
-    34.2,
-    37.0,
-    50.3,
-    null,
-  ];
+let cachedDefaultCohorts: {
+  filePath: string;
+  mtimeMs: number;
+  result: CohortHeatmapResult;
+} | null = null;
 
-  return { cohorts, averageRetention, cutoffDate: "2011-11-09" };
+function monthDiff(startYm: string, endYm: string): number {
+  const [sy, sm] = startYm.split("-").map(Number);
+  const [ey, em] = endYm.split("-").map(Number);
+  return (ey - sy) * 12 + (em - sm);
+}
+
+/**
+ * Lazily parses orders CSV and computes M0-M12 cohort retention, caching by path & mtime.
+ */
+function computeCohortMatrixFromOrdersCsv(ordersPath: string): CohortHeatmapResult {
+  const stat = fs.statSync(ordersPath);
+  if (
+    cachedDefaultCohorts &&
+    cachedDefaultCohorts.filePath === ordersPath &&
+    cachedDefaultCohorts.mtimeMs === stat.mtimeMs
+  ) {
+    return cachedDefaultCohorts.result;
+  }
+
+  const raw = fs.readFileSync(ordersPath, "utf-8");
+  const lines = raw.split(/\r?\n/);
+  if (lines.length < 2) {
+    return {
+      cohorts: [],
+      averageRetention: [],
+      cutoffDate: null,
+      isMissing: true,
+      isSampleData: false,
+      totalCustomers: 0,
+      emptyMessage: "Order transaction records file is empty.",
+    };
+  }
+
+  const headers = lines[0].split(",").map(h => h.trim());
+  const customerIdx = headers.indexOf("customerId");
+  const dateIdx = headers.indexOf("invoiceDate");
+  const cancelIdx = headers.indexOf("isCancellation");
+
+  const customerMonths = new Map<string, Set<string>>();
+  let maxDateStr = "";
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) continue;
+    const cols = line.split(",");
+    if (cancelIdx >= 0 && cols[cancelIdx]?.trim() === "1") continue;
+    const custId = cols[customerIdx]?.trim();
+    const dateStr = cols[dateIdx]?.trim();
+    if (!custId || !dateStr || dateStr.length < 7) continue;
+
+    const ym = dateStr.slice(0, 7);
+    const day = dateStr.slice(0, 10);
+    if (day > maxDateStr) maxDateStr = day;
+
+    let months = customerMonths.get(custId);
+    if (!months) {
+      months = new Set<string>();
+      customerMonths.set(custId, months);
+    }
+    months.add(ym);
+  }
+
+  const maxYm = maxDateStr.slice(0, 7) || "2011-11";
+  const cohortFirstMonths = new Map<string, Map<number, Set<string>>>();
+
+  customerMonths.forEach((months, custId) => {
+    const sortedMonths = Array.from(months).sort();
+    const firstYm = sortedMonths[0];
+    if (!firstYm) return;
+
+    let offsetMap = cohortFirstMonths.get(firstYm);
+    if (!offsetMap) {
+      offsetMap = new Map<number, Set<string>>();
+      cohortFirstMonths.set(firstYm, offsetMap);
+    }
+
+    for (const ym of sortedMonths) {
+      const offset = monthDiff(firstYm, ym);
+      if (offset >= 0 && offset <= 12) {
+        let bucket = offsetMap.get(offset);
+        if (!bucket) {
+          bucket = new Set<string>();
+          offsetMap.set(offset, bucket);
+        }
+        bucket.add(custId);
+      }
+    }
+  });
+
+  const sortedCohortMonths = Array.from(cohortFirstMonths.keys()).sort();
+  const cohorts: CohortRow[] = sortedCohortMonths.map(cohortMonth => {
+    const offsetMap = cohortFirstMonths.get(cohortMonth)!;
+    const baseSize = offsetMap.get(0)?.size ?? 0;
+    const maxObservedOffset = monthDiff(cohortMonth, maxYm);
+    const retentionRates: (number | null)[] = [];
+
+    for (let m = 0; m <= 12; m++) {
+      if (m > maxObservedOffset || baseSize === 0) {
+        retentionRates.push(null);
+      } else {
+        const active = offsetMap.get(m)?.size ?? 0;
+        retentionRates.push(Number(((active / baseSize) * 100).toFixed(1)));
+      }
+    }
+
+    return {
+      cohortMonth,
+      customersCount: baseSize,
+      retentionRates,
+    };
+  });
+
+  const averageRetention: (number | null)[] = [];
+  for (let m = 0; m <= 12; m++) {
+    const rates = cohorts
+      .map(c => c.retentionRates[m])
+      .filter((r): r is number => r !== null);
+    averageRetention.push(
+      rates.length > 0
+        ? Number((rates.reduce((a, b) => a + b, 0) / rates.length).toFixed(1))
+        : null
+    );
+  }
+
+  const result: CohortHeatmapResult = {
+    cohorts,
+    averageRetention,
+    cutoffDate: maxDateStr || "2011-11-09",
+    isMissing: false,
+    isSampleData: false,
+    totalCustomers: customerMonths.size,
+  };
+
+  cachedDefaultCohorts = {
+    filePath: ordersPath,
+    mtimeMs: stat.mtimeMs,
+    result,
+  };
+
+  return result;
+}
+
+/**
+ * Returns cohort retention heatmap (M0 to M12) based on real customer order transaction history.
+ * Unobserved future periods beyond the dataset cutoff date remain null (empty).
+ */
+export function getCohortRetentionHeatmap(
+  tenantId: string = "ws_default"
+): CohortHeatmapResult {
+  const recoveryDir = path.resolve(process.env.RECOVERY_DIR ?? "data/recovery");
+  const ordersPath = path.join(recoveryDir, ORDERS_FILE_NAME);
+
+  if (tenantId === "ws_default") {
+    if (!fs.existsSync(ordersPath)) {
+      return {
+        cohorts: [],
+        averageRetention: [],
+        cutoffDate: null,
+        isMissing: true,
+        isSampleData: false,
+        totalCustomers: 0,
+        emptyMessage: "Order transaction records file is missing or unavailable.",
+      };
+    }
+
+    return computeCohortMatrixFromOrdersCsv(ordersPath);
+  }
+
+  // Non-default workspace: check for customer transactions
+  const tenantCustomers = tenantStorage.getTenantCustomers(tenantId);
+  const events = tenantStorage.listEvents(tenantId);
+
+  if (tenantCustomers.length === 0 && events.length === 0) {
+    return {
+      cohorts: [],
+      averageRetention: [],
+      cutoffDate: null,
+      isMissing: false,
+      isSampleData: true,
+      totalCustomers: 0,
+      emptyMessage:
+        "No transaction records ingested for this workspace yet. Connect Shopify or Stripe to calculate cohort retention.",
+    };
+  }
+
+  // Tenant with sample accounts: return sample cohorts clearly labelled
+  return {
+    cohorts: [
+      {
+        cohortMonth: "2026-08",
+        customersCount: tenantCustomers.length,
+        retentionRates: [100, 42.0, 38.5, null],
+      },
+      {
+        cohortMonth: "2026-09",
+        customersCount: Math.round(tenantCustomers.length * 0.8),
+        retentionRates: [100, 35.0, null, null],
+      },
+      {
+        cohortMonth: "2026-10",
+        customersCount: Math.round(tenantCustomers.length * 0.6),
+        retentionRates: [100, null, null, null],
+      },
+    ],
+    averageRetention: [100, 38.5, 38.5, null],
+    cutoffDate: "2026-10-31",
+    isMissing: false,
+    isSampleData: true,
+    totalCustomers: tenantCustomers.length,
+    emptyMessage: undefined,
+  };
 }
 
 /**

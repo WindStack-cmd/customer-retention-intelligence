@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, afterEach } from "vitest";
 import { tenantStorage } from "./tenantStorage";
 import { executeScoringRun } from "./scoringRunner";
 import { sendPlaybookEmail, dispatchAlert } from "./playbookService";
@@ -177,6 +177,23 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
     expect(heatmap.cohorts[0].retentionRates.length).toBe(13); // Full M0 through M12
     expect(heatmap.cohorts[0].retentionRates[0]).toBe(100);
     expect(heatmap.averageRetention.length).toBe(13);
+    expect(heatmap.isSampleData).toBe(false);
+    expect(heatmap.isMissing).toBe(false);
+
+    // Per-workspace isolation: new workspace with no transactions returns empty state
+    const emptyWsHeatmap = getCohortRetentionHeatmap("ws_nonexistent_empty");
+    expect(emptyWsHeatmap.cohorts.length).toBe(0);
+    expect(emptyWsHeatmap.isSampleData).toBe(true);
+    expect(emptyWsHeatmap.emptyMessage).toContain("No transaction records");
+
+    // Missing orders file handled gracefully without crashing
+    const originalRecoveryDir = process.env.RECOVERY_DIR;
+    process.env.RECOVERY_DIR = "data/non_existent_recovery_dir";
+    const missingFileHeatmap = getCohortRetentionHeatmap("ws_default");
+    expect(missingFileHeatmap.isMissing).toBe(true);
+    expect(missingFileHeatmap.cohorts.length).toBe(0);
+    expect(missingFileHeatmap.emptyMessage).toContain("missing or unavailable");
+    process.env.RECOVERY_DIR = originalRecoveryDir;
 
     const shap = getShapWaterfall(17850, testWsId);
     expect(shap.features.length).toBeGreaterThan(0);
@@ -422,17 +439,47 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
       provider: "okta",
       entityId: "https://identity.okta.com/app/pulseboard_saml",
       ssoUrl: "https://identity.okta.com/app/pulseboard_saml/sso/saml",
-      enforceSso: true,
+      enforceSso: false,
       domains: ["pulseboard.io", "enterprise.com"],
     });
 
     expect(sso.provider).toBe("okta");
-    expect(sso.enforceSso).toBe(true);
+    expect(sso.enforceSso).toBe(false);
     expect(sso.domains).toContain("enterprise.com");
     expect(sso.status).toBe("simulated");
 
     const fetched = tenantStorage.getSsoConfig(testWsId);
     expect(fetched.entityId).toBe("https://identity.okta.com/app/pulseboard_saml");
+  });
+
+  it("rejects enforceSso server-side while SAML ACS is disabled (501)", async () => {
+    const adminCaller = appRouter.createCaller({
+      req: {} as any,
+      res: {} as any,
+      user: { id: 1, openId: "admin", name: "Admin", role: "admin", email: "admin@test.com" } as any,
+      workspace: { id: testWsId, name: "Test WS", slug: "test", plan: "enterprise", customerLimit: 100000 } as any,
+      membership: { id: 1, workspaceId: testWsId, userId: 1, role: "admin" } as any,
+      role: "admin",
+    });
+
+    await expect(
+      adminCaller.security.updateSsoConfig({
+        provider: "okta",
+        entityId: "https://identity.okta.com/app/pulseboard_saml",
+        ssoUrl: "https://identity.okta.com/app/pulseboard_saml/sso/saml",
+        enforceSso: true,
+        domains: ["pulseboard.io"],
+      })
+    ).rejects.toThrow("Enforce SSO cannot be enabled while SAML ACS is disabled");
+
+    const res = await adminCaller.security.updateSsoConfig({
+      provider: "okta",
+      entityId: "https://identity.okta.com/app/pulseboard_saml",
+      ssoUrl: "https://identity.okta.com/app/pulseboard_saml/sso/saml",
+      enforceSso: false,
+      domains: ["pulseboard.io"],
+    });
+    expect(res.enforceSso).toBe(false);
   });
 
   it("strictly disables unvalidated SAML assertions and returns 501 on ACS", async () => {
@@ -472,5 +519,108 @@ describe("Phase 2-4: Ingestion, Actions, Analytics, & Security", () => {
 
     expect(res.status).toBe(501);
     expect(res.body.error).toBe("SSO login not enabled");
+  });
+
+  describe("Production Mode Mock Disabling & Guard Policy", () => {
+    const originalEnv = { ...process.env };
+
+    afterEach(() => {
+      process.env = { ...originalEnv };
+    });
+
+    it("fails checkout with 'Billing not configured' and does not change plan in production when stripe key is missing", async () => {
+      process.env.NODE_ENV = "production";
+      delete process.env.STRIPE_SECRET_KEY;
+
+      const ws = tenantStorage.createWorkspace({
+        name: "Prod Billing Test WS",
+        plan: "starter",
+        userId: 999,
+      });
+      expect(ws.plan).toBe("starter");
+
+      await expect(
+        createCheckoutSession({
+          workspaceId: ws.id,
+          planId: "enterprise",
+          returnUrl: "http://localhost:3000",
+        })
+      ).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        message: "Billing not configured",
+      });
+
+      const adminCaller = appRouter.createCaller({
+        req: {} as any,
+        res: {} as any,
+        user: { id: 999, openId: "admin", name: "Admin", role: "admin", email: "admin@test.com" } as any,
+        workspace: ws,
+        membership: { id: 1, workspaceId: ws.id, userId: 999, role: "admin" } as any,
+        role: "admin",
+      });
+
+      await expect(
+        adminCaller.billing.createCheckout({
+          planId: "enterprise",
+          returnUrl: "http://localhost:3000",
+        })
+      ).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        message: "Billing not configured",
+      });
+
+      await expect(
+        adminCaller.billing.createPortal({
+          returnUrl: "http://localhost:3000",
+        })
+      ).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        message: "Billing not configured",
+      });
+
+      // Verify plan is UNCHANGED
+      const fetched = tenantStorage.getWorkspace(ws.id);
+      expect(fetched?.plan).toBe("starter");
+      expect(fetched?.customerLimit).toBe(1000);
+    });
+
+    it("returns 'Not connected' (connected: false) for integrations in production without credentials", () => {
+      process.env.NODE_ENV = "production";
+      delete process.env.STRIPE_SECRET_KEY;
+      delete process.env.SHOPIFY_API_KEY;
+      delete process.env.SLACK_WEBHOOK_URL;
+      delete process.env.HUBSPOT_ACCESS_TOKEN;
+      delete process.env.SALESFORCE_ACCESS_TOKEN;
+
+      const config = tenantStorage.getIntegrationConfig(testWsId);
+      expect(config.stripe.connected).toBe(false);
+      expect(config.shopify.connected).toBe(false);
+      expect(config.slack.connected).toBe(false);
+      expect(config.crm.connected).toBe(false);
+    });
+
+    it("allows labelled mock mode in development environment", async () => {
+      process.env.NODE_ENV = "development";
+      delete process.env.STRIPE_SECRET_KEY;
+
+      const devWs = tenantStorage.createWorkspace({
+        name: "Dev Billing WS",
+        plan: "starter",
+        userId: 998,
+      });
+
+      const checkout = await createCheckoutSession({
+        workspaceId: devWs.id,
+        planId: "enterprise",
+        returnUrl: "http://localhost:3000",
+      });
+      expect(checkout.mode).toBe("mock");
+
+      const config = tenantStorage.getIntegrationConfig(devWs.id);
+      expect(config.stripe.connected).toBe(true);
+      expect(config.stripe.mode).toBe("mock");
+      expect(config.shopify.connected).toBe(true);
+      expect(config.shopify.mode).toBe("mock");
+    });
   });
 });

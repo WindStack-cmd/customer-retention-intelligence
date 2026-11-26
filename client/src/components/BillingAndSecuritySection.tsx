@@ -24,7 +24,10 @@ export function BillingAndSecuritySection() {
 
   const [gdprCustomerId, setGdprCustomerId] = useState("");
   const [gdprMessage, setGdprMessage] = useState<string | null>(null);
-  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
+  const [upgradeMessage, setUpgradeMessage] = useState<{
+    text: string;
+    isError?: boolean;
+  } | null>(null);
 
   // SSO / SAML State
   const [ssoProvider, setSsoProvider] = useState<"google" | "microsoft" | "okta">("okta");
@@ -58,7 +61,9 @@ export function BillingAndSecuritySection() {
   const checkoutMutation = trpc.billing.createCheckout.useMutation({
     onSuccess: (res) => {
       if (res.mode === "mock") {
-        setUpgradeMessage("Subscription tier updated successfully in simulated mode!");
+        setUpgradeMessage({
+          text: "Subscription tier updated successfully in simulated mode!",
+        });
         utils.billing.subscription.invalidate();
         utils.workspace.current.invalidate();
         setTimeout(() => setUpgradeMessage(null), 5000);
@@ -67,7 +72,10 @@ export function BillingAndSecuritySection() {
       }
     },
     onError: (err) => {
-      setUpgradeMessage(err.message);
+      setUpgradeMessage({
+        text: err.message || "Billing not configured",
+        isError: true,
+      });
       setTimeout(() => setUpgradeMessage(null), 6000);
     },
   });
@@ -106,9 +114,20 @@ export function BillingAndSecuritySection() {
       </div>
 
       {upgradeMessage && (
-        <div className="rounded-xl border border-primary/30 bg-primary/10 p-3 text-xs text-primary flex items-center gap-2">
-          <Sparkles className="h-4 w-4 shrink-0" />
-          <span>{upgradeMessage}</span>
+        <div
+          role={upgradeMessage.isError ? "alert" : "status"}
+          className={`rounded-xl border p-3 text-xs flex items-center gap-2 ${
+            upgradeMessage.isError
+              ? "border-status-urgent-border bg-status-urgent-bg text-status-urgent-text"
+              : "border-primary/30 bg-primary/10 text-primary"
+          }`}
+        >
+          {upgradeMessage.isError ? (
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+          ) : (
+            <Sparkles className="h-4 w-4 shrink-0" />
+          )}
+          <span>{upgradeMessage.text}</span>
         </div>
       )}
 
@@ -403,23 +422,17 @@ export function BillingAndSecuritySection() {
             <input
               type="checkbox"
               id="enforceSso"
-              checked={enforceSso}
-              disabled={!ssoUrl.trim() || !ssoEntityId.trim()}
-              onChange={(e) => setEnforceSso(e.target.checked)}
+              checked={false}
+              disabled={true}
+              onChange={() => {}}
               className="rounded border-border bg-background text-primary focus:ring-0 disabled:opacity-40"
             />
             <label
               htmlFor="enforceSso"
-              className={`text-foreground ${
-                !ssoUrl.trim() || !ssoEntityId.trim()
-                  ? "opacity-60 cursor-not-allowed"
-                  : ""
-              }`}
+              className="text-foreground opacity-60 cursor-not-allowed"
             >
               Enforce SSO authentication for all users with matching email domains{" "}
-              {!ssoUrl.trim() || !ssoEntityId.trim()
-                ? "(requires configured IdP details above)"
-                : ""}
+              <span className="text-subtle-foreground">(Available when SAML login is enabled)</span>
             </label>
           </div>
 

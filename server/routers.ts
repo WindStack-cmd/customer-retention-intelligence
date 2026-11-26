@@ -6,6 +6,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import {
   adminProcedure,
+  analystProcedure,
   csmProcedure,
   protectedProcedure,
   publicProcedure,
@@ -134,7 +135,7 @@ export const appRouter = router({
         return updated;
       }),
 
-    members: workspaceProcedure.query(({ ctx }) => {
+    members: adminProcedure.query(({ ctx }) => {
       return tenantStorage.listMembers(ctx.workspace.id);
     }),
 
@@ -243,35 +244,35 @@ export const appRouter = router({
     executiveOverview: viewerProcedure.query(({ ctx }) =>
       readOnly(() => executiveOverview(ctx.workspace.id))
     ),
-    customers: viewerProcedure
+    customers: csmProcedure
       .input(customerListSchema)
       .query(({ ctx, input }) =>
         readOnly(() => listCustomers(input, ctx.workspace.id))
       ),
-    customerDetail: viewerProcedure
+    customerDetail: csmProcedure
       .input(customerIdSchema)
       .query(({ ctx, input }) =>
         readOnly(() => customerDetail(input.customerId, ctx.workspace.id))
       ),
-    recommendations: viewerProcedure
+    recommendations: csmProcedure
       .input(recommendationListSchema)
       .query(({ ctx, input }) =>
         readOnly(() => listRecommendations(input, ctx.workspace.id))
       ),
-    dataQuality: viewerProcedure.query(() => readOnly(dataQualityMetadata)),
-    modelRuns: viewerProcedure.query(() => readOnly(modelMetadata)),
+    dataQuality: analystProcedure.query(() => readOnly(dataQualityMetadata)),
+    modelRuns: analystProcedure.query(() => readOnly(modelMetadata)),
 
     cohortHeatmap: viewerProcedure.query(async ({ ctx }) =>
       readOnly(async () => getCohortRetentionHeatmap(ctx.workspace.id))
     ),
-    shapWaterfall: viewerProcedure
+    shapWaterfall: csmProcedure
       .input(customerIdSchema)
       .query(async ({ ctx, input }) =>
         readOnly(async () =>
           getShapWaterfall(input.customerId, ctx.workspace.id)
         )
       ),
-    journeyTimeline: viewerProcedure
+    journeyTimeline: csmProcedure
       .input(customerIdSchema)
       .query(async ({ ctx, input }) =>
         readOnly(async () =>
@@ -281,7 +282,7 @@ export const appRouter = router({
   }),
 
   analyst: router({
-    ask: viewerProcedure
+    ask: analystProcedure
       .input(analystQuestionSchema)
       .mutation(async ({ ctx, input }) => {
         const check = tenantStorage.incrementAnalystUsage(ctx.workspace.id);
@@ -294,14 +295,14 @@ export const appRouter = router({
         return readOnly(() => answerAnalystQuestion(input));
       }),
 
-    quota: viewerProcedure.query(({ ctx }) => {
+    quota: analystProcedure.query(({ ctx }) => {
       return tenantStorage.getAnalystDailyUsage(ctx.workspace.id);
     }),
   }),
 
   // Phase 2: Ingestion, Connectors, & Scoring Runner
   integrations: router({
-    status: workspaceProcedure.query(({ ctx }) => {
+    status: adminProcedure.query(({ ctx }) => {
       const config = tenantStorage.getIntegrationConfig(ctx.workspace.id);
       return {
         stripe: config.stripe,
@@ -416,13 +417,13 @@ export const appRouter = router({
         return result;
       }),
 
-    events: workspaceProcedure
+    events: adminProcedure
       .input(z.object({ limit: z.number().optional() }).optional())
       .query(({ ctx, input }) => {
         return tenantStorage.listEvents(ctx.workspace.id, input?.limit ?? 50);
       }),
 
-    scoringRuns: workspaceProcedure
+    scoringRuns: adminProcedure
       .input(z.object({ limit: z.number().optional() }).optional())
       .query(({ ctx, input }) => {
         return tenantStorage.listScoringRuns(
@@ -431,11 +432,11 @@ export const appRouter = router({
         );
       }),
 
-    schedulerStatus: workspaceProcedure.query(({ ctx }) => {
+    schedulerStatus: adminProcedure.query(({ ctx }) => {
       return getSchedulerStatus(ctx.workspace.id);
     }),
 
-    triggerScoring: csmProcedure.mutation(async ({ ctx }) => {
+    triggerScoring: adminProcedure.mutation(async ({ ctx }) => {
       return await executeScoringRun(ctx.workspace.id, "manual");
     }),
 
@@ -502,7 +503,7 @@ export const appRouter = router({
 
   // Phase 3: Closed-Loop Retention Actions, Playbooks, Alerts, Notes
   actions: router({
-    playbooks: workspaceProcedure.query(({ ctx }) => {
+    playbooks: csmProcedure.query(({ ctx }) => {
       return tenantStorage.listPlaybookTemplates(ctx.workspace.id);
     }),
 
@@ -626,11 +627,11 @@ export const appRouter = router({
         };
       }),
 
-    interventions: workspaceProcedure.query(({ ctx }) => {
+    interventions: csmProcedure.query(({ ctx }) => {
       return tenantStorage.listInterventions(ctx.workspace.id);
     }),
 
-    roiSummary: workspaceProcedure.query(({ ctx }) => {
+    roiSummary: viewerProcedure.query(({ ctx }) => {
       const interventions = tenantStorage.listInterventions(ctx.workspace.id);
       const totalSent = interventions.length;
 
@@ -679,7 +680,7 @@ export const appRouter = router({
       };
     }),
 
-    notes: workspaceProcedure
+    notes: csmProcedure
       .input(customerIdSchema)
       .query(({ ctx, input }) => {
         return tenantStorage.listNotes(ctx.workspace.id, input.customerId);
@@ -715,7 +716,7 @@ export const appRouter = router({
         return note;
       }),
 
-    alerts: workspaceProcedure.query(({ ctx }) => {
+    alerts: csmProcedure.query(({ ctx }) => {
       return tenantStorage.listAlertRules(ctx.workspace.id);
     }),
 
@@ -809,9 +810,9 @@ export const appRouter = router({
 
   // Phase 4: Billing, Security, & Compliance
   billing: router({
-    plans: workspaceProcedure.query(() => Object.values(BILLING_PLANS)),
+    plans: adminProcedure.query(() => Object.values(BILLING_PLANS)),
 
-    subscription: workspaceProcedure.query(({ ctx }) => {
+    subscription: adminProcedure.query(({ ctx }) => {
       const plan = BILLING_PLANS[ctx.workspace.plan] || BILLING_PLANS.pro;
       const customers = tenantStorage.getTenantCustomers(ctx.workspace.id);
       const customerCount = ctx.workspace.id === "ws_default" ? 4122 : customers.length;
@@ -881,6 +882,13 @@ export const appRouter = router({
         })
       )
       .mutation(({ ctx, input }) => {
+        if (input.enforceSso) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Enforce SSO cannot be enabled while SAML ACS is disabled (501). SAML login must be enabled first.",
+          });
+        }
         const updated = tenantStorage.saveSsoConfig(ctx.workspace.id, input);
         tenantStorage.logAudit({
           workspaceId: ctx.workspace.id,

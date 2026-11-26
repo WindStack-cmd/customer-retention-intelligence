@@ -11,6 +11,11 @@ import { RetentionROISection } from "@/components/RetentionROISection";
 import { CohortHeatmap } from "@/components/CohortHeatmap";
 import { BillingAndSecuritySection } from "@/components/BillingAndSecuritySection";
 import { CustomerDrawerEnhancements } from "@/components/CustomerDrawerEnhancements";
+import {
+  computeActiveSection,
+  getVisibleNavIdsForRole,
+  type NavSectionId,
+} from "@/lib/scrollNav";
 import { trpc } from "@/lib/trpc";
 import {
   Activity,
@@ -33,7 +38,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatCurrency, formatDate } from "./homeData";
 
 function formatNumber(value: number) {
@@ -99,22 +104,20 @@ function LoadingState({ label }: { label: string }) {
   );
 }
 
-const mainNavItems = [
-  { id: "overview", label: "Overview", icon: Activity },
-  { id: "customers", label: "Customers", icon: UsersRound },
-  { id: "recommendations", label: "Actions", icon: Sparkles },
-  { id: "roi", label: "Impact/ROI", icon: TrendingUp },
-  { id: "cohorts", label: "Cohorts", icon: Grid },
-  { id: "metadata", label: "Data & model", icon: Database },
-];
+const navItemById = {
+  overview: { id: "overview" as const, label: "Overview", icon: Activity },
+  recommendations: { id: "recommendations" as const, label: "Actions", icon: Sparkles },
+  customers: { id: "customers" as const, label: "Customers", icon: UsersRound },
+  roi: { id: "roi" as const, label: "Impact/ROI", icon: TrendingUp },
+  cohorts: { id: "cohorts" as const, label: "Cohorts", icon: Grid },
+  integrations: { id: "integrations" as const, label: "Integrations", icon: Zap },
+  team: { id: "team" as const, label: "Team", icon: ShieldCheck },
+  billing: { id: "billing" as const, label: "Billing & security", icon: CreditCard },
+  metadata: { id: "metadata" as const, label: "Data & model", icon: Database },
+};
 
-const adminNavItems = [
-  { id: "integrations", label: "Integrations", icon: Zap },
-  { id: "team", label: "Team", icon: ShieldCheck },
-  { id: "billing", label: "Billing & security", icon: CreditCard },
-];
-
-const allNavItems = [...mainNavItems, ...adminNavItems];
+const adminNavIds = new Set<NavSectionId>(["integrations", "team", "billing"]);
+const allNavItems = Object.values(navItemById);
 
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
@@ -123,10 +126,22 @@ export default function Home() {
     retry: false,
   });
   const memberRole = currentWorkspaceQuery.data?.role;
-  const isAdminOrCsm =
-    user?.role === "admin" ||
-    memberRole === "admin" ||
-    memberRole === "csm";
+  const isAdmin = user?.role === "admin" || memberRole === "admin";
+  const isCsm = memberRole === "csm";
+  const isViewer = memberRole === "viewer";
+  const visibleNavIds = useMemo(
+    () => getVisibleNavIdsForRole(memberRole, user?.role === "admin"),
+    [memberRole, user?.role]
+  );
+  const topMainNavItems = visibleNavIds
+    .filter(id => !adminNavIds.has(id) && id !== "metadata")
+    .map(id => navItemById[id]);
+  const adminNavItems = visibleNavIds
+    .filter(id => adminNavIds.has(id))
+    .map(id => navItemById[id]);
+  const footerNavItems = visibleNavIds
+    .filter(id => id === "metadata")
+    .map(id => navItemById[id]);
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -241,42 +256,28 @@ export default function Home() {
       const viewportHeight = window.innerHeight;
       const documentHeight = document.documentElement.scrollHeight;
 
-      const activeNavPool = isAdminOrCsm ? allNavItems : mainNavItems;
-      const sectionElements = activeNavPool
-        .map(item => document.getElementById(item.id))
-        .filter((el): el is HTMLElement => el !== null);
+      const sections = visibleNavIds
+        .map(id => {
+          const el = document.getElementById(id);
+          if (!el) return null;
+          return {
+            id,
+            top: el.getBoundingClientRect().top + scrollY,
+          };
+        })
+        .filter((item): item is { id: NavSectionId; top: number } => item !== null);
 
-      if (sectionElements.length === 0) return;
+      const nextActiveId = computeActiveSection({
+        sections,
+        visibleIds: visibleNavIds,
+        scrollY,
+        viewportHeight,
+        documentHeight,
+      });
 
-      sectionElements.sort((a, b) => a.offsetTop - b.offsetTop);
-
-      // Scrolled to the very top: first section is active
-      if (scrollY <= 10) {
-        setActiveNav(prev =>
-          prev === sectionElements[0].id ? prev : sectionElements[0].id
-        );
-        return;
+      if (nextActiveId) {
+        setActiveNav(prev => (prev === nextActiveId ? prev : nextActiveId));
       }
-
-      // Scrolled to the very bottom: last section is active
-      if (scrollY + viewportHeight >= documentHeight - 15) {
-        const lastId = sectionElements[sectionElements.length - 1].id;
-        setActiveNav(prev => (prev === lastId ? prev : lastId));
-        return;
-      }
-
-      // Active section = last section whose top edge is at or above the trigger line (~35% of viewport height)
-      const triggerLine = window.innerHeight * 0.35;
-
-      let currentActiveId = sectionElements[0].id;
-      for (const el of sectionElements) {
-        const rect = el.getBoundingClientRect();
-        if (rect.top <= triggerLine) {
-          currentActiveId = el.id;
-        }
-      }
-
-      setActiveNav(prev => (prev === currentActiveId ? prev : currentActiveId));
     };
 
     const onScrollOrResize = () => {
@@ -315,7 +316,7 @@ export default function Home() {
         window.clearTimeout(clickLockTimeoutRef.current);
       }
     };
-  }, [unlockClick, isAdminOrCsm]);
+  }, [unlockClick, visibleNavIds]);
   const [analystMessages, setAnalystMessages] = useState<AnalystMessage[]>([
     {
       role: "assistant",
@@ -333,6 +334,9 @@ export default function Home() {
   }, [searchDraft]);
 
   const enabled = Boolean(user);
+  const canViewCustomers = isAdmin || isCsm;
+  const canViewAnalyst = !isViewer;
+
   const overview = trpc.analytics.executiveOverview.useQuery(undefined, {
     enabled,
     retry: false,
@@ -349,19 +353,22 @@ export default function Home() {
             ? 0.65
             : undefined,
     },
-    { enabled, retry: false }
+    { enabled: enabled && canViewCustomers, retry: false }
   );
   const recommendations = trpc.analytics.recommendations.useQuery(
     { page: 1, pageSize: 5 },
-    { enabled, retry: false }
+    { enabled: enabled && canViewCustomers, retry: false }
   );
   const detail = trpc.analytics.customerDetail.useQuery(
     { customerId: selectedCustomer ?? 1 },
-    { enabled: enabled && selectedCustomer !== null, retry: false }
+    { enabled: enabled && canViewCustomers && selectedCustomer !== null, retry: false }
   );
 
   const { data: analystQuota, refetch: refetchQuota } =
-    trpc.analyst.quota.useQuery(undefined, { enabled });
+    trpc.analyst.quota.useQuery(undefined, {
+      enabled: enabled && canViewAnalyst,
+      retry: false,
+    });
 
   const analyst = trpc.analyst.ask.useMutation({
     onSuccess: result => {
@@ -462,7 +469,7 @@ export default function Home() {
           <WorkspaceSwitcher />
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="Main navigation">
-          {mainNavItems.map(item => {
+          {topMainNavItems.map(item => {
             const isActive = activeNav === item.id;
             return (
               <a
@@ -486,7 +493,7 @@ export default function Home() {
             );
           })}
 
-          {isAdminOrCsm && (
+          {isAdmin && (
             <div className="pt-4">
               <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[.2em] text-subtle-foreground">
                 Admin
@@ -516,6 +523,34 @@ export default function Home() {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {footerNavItems.length > 0 && (
+            <div className="pt-2">
+              {footerNavItems.map(item => {
+                const isActive = activeNav === item.id;
+                return (
+                  <a
+                    key={item.id}
+                    href={`#${item.id}`}
+                    onClick={() => handleNavClick(item.id)}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary ${
+                      isActive
+                        ? "bg-accent-soft text-foreground font-semibold"
+                        : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+                    }`}
+                  >
+                    <item.icon
+                      className={`h-[17px] w-[17px] shrink-0 transition-colors ${
+                        isActive ? "text-primary" : "text-muted-foreground"
+                      }`}
+                    />
+                    {item.label}
+                  </a>
+                );
+              })}
             </div>
           )}
         </nav>
@@ -589,7 +624,7 @@ export default function Home() {
               <WorkspaceSwitcher />
             </div>
             <div className="space-y-1 max-h-80 overflow-y-auto">
-              {mainNavItems.map(item => {
+              {topMainNavItems.map(item => {
                 const isActive = activeNav === item.id;
                 return (
                   <a
@@ -613,7 +648,7 @@ export default function Home() {
                 );
               })}
 
-              {isAdminOrCsm && (
+              {isAdmin && (
                 <div className="pt-3">
                   <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[.2em] text-subtle-foreground">
                     Admin
@@ -645,6 +680,30 @@ export default function Home() {
                   </div>
                 </div>
               )}
+
+              {footerNavItems.map(item => {
+                const isActive = activeNav === item.id;
+                return (
+                  <a
+                    key={item.id}
+                    href={`#${item.id}`}
+                    onClick={() => handleNavClick(item.id)}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary ${
+                      isActive
+                        ? "bg-accent-soft text-foreground font-semibold"
+                        : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+                    }`}
+                  >
+                    <item.icon
+                      className={`h-[17px] w-[17px] shrink-0 transition-colors ${
+                        isActive ? "text-primary" : "text-muted-foreground"
+                      }`}
+                    />
+                    {item.label}
+                  </a>
+                );
+              })}
             </div>
           </div>
         )}
@@ -722,10 +781,11 @@ export default function Home() {
             </section>
           )}
 
-          <section
-            id="analyst"
-            className="mt-5 rounded-2xl border border-border bg-card p-5 shadow-2xl sm:p-6"
-          >
+          {canViewAnalyst && (
+            <section
+              id="analyst"
+              className="mt-5 rounded-2xl border border-border bg-card p-5 shadow-2xl sm:p-6"
+            >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
@@ -765,9 +825,12 @@ export default function Home() {
               ]}
               className="border-border bg-surface-2"
             />
-          </section>
+            </section>
+          )}
 
-          <section className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
+          {canViewCustomers && (
+            <>
+              <section className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
             <div
               id="recommendations"
               className="rounded-2xl border border-border bg-card p-5 shadow-2xl sm:p-6"
@@ -1033,6 +1096,8 @@ export default function Home() {
               </div>
             </div>
           </section>
+            </>
+          )}
 
           {/* Phase 3: Retention Outcome & ROI Tracking */}
           <section id="roi" className="mt-8">
@@ -1044,39 +1109,44 @@ export default function Home() {
             <CohortHeatmap />
           </section>
 
-          {/* Phase 2: Ingestion & Connectors */}
-          <section id="integrations" className="mt-8">
-            <IntegrationsSection />
-          </section>
+          {/* Phase 2: Ingestion & Connectors, Team, Billing - Admin only */}
+          {isAdmin && (
+            <>
+              <section id="integrations" className="mt-8">
+                <IntegrationsSection />
+              </section>
 
-          {/* Phase 1: Team & Access Control */}
-          <section id="team" className="mt-8">
-            <TeamManagement />
-          </section>
+              <section id="team" className="mt-8">
+                <TeamManagement />
+              </section>
 
-          {/* Phase 4: Billing, Security, & Compliance */}
-          <section id="billing" className="mt-8">
-            <BillingAndSecuritySection />
-          </section>
+              <section id="billing" className="mt-8">
+                <BillingAndSecuritySection />
+              </section>
+            </>
+          )}
 
-          <section
-            id="metadata"
-            className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-5 py-4 text-[11px] text-muted-foreground sm:px-6"
-          >
-            <div className="flex items-center gap-2">
-              <Database className="h-4 w-4 text-primary-text" />
-              <span>Dataset: {metadata?.datasetName ?? "Unavailable"}</span>
-              <span className="text-subtle-foreground">·</span>
-              <span>Model: {metadata?.modelVersion ?? "Unavailable"}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span>
-                Feature version: {metadata?.featureVersion ?? "Unavailable"}
-              </span>
-              <span className="text-subtle-foreground">·</span>
-              <span>Cutoff: {formatDate(metadata?.cutoffAt ?? null)}</span>
-            </div>
-          </section>
+          {/* Data & model provenance - Kept for Admin, CSM, Analyst; hidden for Viewer */}
+          {!isViewer && (
+            <section
+              id="metadata"
+              className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-5 py-4 text-[11px] text-muted-foreground sm:px-6"
+            >
+              <div className="flex items-center gap-2">
+                <Database className="h-4 w-4 text-primary-text" />
+                <span>Dataset: {metadata?.datasetName ?? "Unavailable"}</span>
+                <span className="text-subtle-foreground">·</span>
+                <span>Model: {metadata?.modelVersion ?? "Unavailable"}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span>
+                  Feature version: {metadata?.featureVersion ?? "Unavailable"}
+                </span>
+                <span className="text-subtle-foreground">·</span>
+                <span>Cutoff: {formatDate(metadata?.cutoffAt ?? null)}</span>
+              </div>
+            </section>
+          )}
         </main>
       </div>
 

@@ -18,9 +18,20 @@ import {
 
 export function RetentionROISection() {
   const utils = trpc.useUtils();
+  const { data: currentWs } = trpc.workspace.current.useQuery();
+  const role = currentWs?.role;
+  const isAdmin = role === "admin";
+  const isCsmOrAdmin = role === "admin" || role === "csm";
+
   const { data: roi } = trpc.actions.roiSummary.useQuery();
-  const { data: playbooks } = trpc.actions.playbooks.useQuery();
-  const { data: alerts } = trpc.actions.alerts.useQuery();
+  const { data: playbooks } = trpc.actions.playbooks.useQuery(undefined, {
+    enabled: isCsmOrAdmin,
+    retry: false,
+  });
+  const { data: alerts } = trpc.actions.alerts.useQuery(undefined, {
+    enabled: isCsmOrAdmin,
+    retry: false,
+  });
 
   const [testAlertMessage, setTestAlertMessage] = useState<string | null>(null);
   const [testAlertChannel, setTestAlertChannel] = useState<"slack" | "webhook" | "hubspot" | "salesforce">("slack");
@@ -155,46 +166,50 @@ export function RetentionROISection() {
         </p>
       </div>
 
-      {/* Playbook Templates */}
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-2xl">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
-          <Send className="h-4 w-4 text-primary" />
-          <span>Active Retention Playbooks</span>
-        </h4>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {playbooks?.map((pb) => (
-            <div
-              key={pb.id}
-              className="flex flex-col justify-between rounded-xl border border-border bg-background p-4"
-            >
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-xs text-foreground">{pb.name}</span>
-                  <span className="rounded bg-primary/10 px-2 py-0.5 text-[10px] text-primary font-medium">
-                    {pb.category}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">{pb.description || pb.subject}</p>
-              </div>
-              <div className="mt-4 flex items-center justify-between pt-3 border-t border-border text-[11px]">
-                <span className="text-subtle-foreground">
-                  Incentive: {pb.discountPercent ? `${pb.discountPercent}% off` : "None"} · {pb.cooldownDays}d cooldown
-                </span>
-                <button
-                  onClick={() => setEditingTemplate(pb)}
-                  className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+      {isCsmOrAdmin && (
+        <>
+          {/* Playbook Templates */}
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
+              <Send className="h-4 w-4 text-primary" />
+              <span>Active Retention Playbooks</span>
+            </h4>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {playbooks?.map((pb) => (
+                <div
+                  key={pb.id}
+                  className="flex flex-col justify-between rounded-xl border border-border bg-background p-4"
                 >
-                  <Edit3 className="h-3 w-3" />
-                  <span>Customize</span>
-                </button>
-              </div>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-xs text-foreground">{pb.name}</span>
+                      <span className="rounded bg-primary/10 px-2 py-0.5 text-[10px] text-primary font-medium">
+                        {pb.category}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">{pb.description || pb.subject}</p>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between pt-3 border-t border-border text-[11px]">
+                    <span className="text-subtle-foreground">
+                      Incentive: {pb.discountPercent ? `${pb.discountPercent}% off` : "None"} · {pb.cooldownDays}d cooldown
+                    </span>
+                    {isAdmin && (
+                      <button
+                        onClick={() => setEditingTemplate(pb)}
+                        className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                      >
+                        <Edit3 className="h-3 w-3" />
+                        <span>Customize</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      {/* Alert Rules & Dispatch */}
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-2xl">
+          {/* Alert Rules & Dispatch */}
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-2xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
@@ -347,6 +362,8 @@ export function RetentionROISection() {
           })}
         </div>
       </div>
+        </>
+      )}
 
       {/* Alert Rule Create / Edit Modal */}
       {isRuleModalOpen && editingRule && (

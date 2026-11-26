@@ -1,4 +1,6 @@
+import { TRPCError } from "@trpc/server";
 import { tenantStorage } from "./tenantStorage";
+import { isDevLike } from "./_core/env";
 
 export interface PlanConfig {
   id: "starter" | "pro" | "enterprise";
@@ -57,11 +59,20 @@ export async function createCheckoutSession(params: {
   planId: "starter" | "pro" | "enterprise";
   returnUrl: string;
 }): Promise<{ url: string; mode: "stripe" | "mock" }> {
+  const isProduction = !isDevLike();
   const stripeKey = process.env.STRIPE_SECRET_KEY;
+  const hasStripeKey = Boolean(stripeKey && !stripeKey.includes("placeholder"));
   const workspace = tenantStorage.getWorkspace(params.workspaceId);
   if (!workspace) throw new Error("Workspace not found");
 
-  if (stripeKey && !stripeKey.includes("placeholder")) {
+  if (isProduction && !hasStripeKey) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Billing not configured",
+    });
+  }
+
+  if (hasStripeKey) {
     try {
       // In real mode, use Stripe API
       const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
@@ -114,6 +125,17 @@ export async function createPortalSession(params: {
   workspaceId: string;
   returnUrl: string;
 }): Promise<{ url: string; mode: "stripe" | "mock" }> {
+  const isProduction = !isDevLike();
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  const hasStripeKey = Boolean(stripeKey && !stripeKey.includes("placeholder"));
+
+  if (isProduction && !hasStripeKey) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Billing not configured",
+    });
+  }
+
   return {
     url: `${params.returnUrl}#billing-manage`,
     mode: "mock",

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { isDevLike } from "./_core/env";
 import type {
   Workspace,
   WorkspaceMember,
@@ -175,7 +176,7 @@ function loadInitialData(): TenantCacheData {
   ];
 
   const cacheFilePath = getCacheFilePath();
-  if (fs.existsSync(cacheFilePath)) {
+  if (isDevLike() && fs.existsSync(cacheFilePath)) {
     try {
       const raw = fs.readFileSync(cacheFilePath, "utf-8");
       const parsed = JSON.parse(raw);
@@ -230,7 +231,7 @@ function loadInitialData(): TenantCacheData {
   };
 }
 
-import { getDb } from "./db";
+import { getDb, isDbConnectionSkipped, recordDbFailure } from "./db";
 import {
   workspaces,
   workspaceMembers,
@@ -243,19 +244,20 @@ import {
   auditLogs,
 } from "../drizzle/schema";
 
-class TenantStorage {
+export class TenantStorage {
   private data: TenantCacheData;
 
   constructor() {
-    this.data = loadInitialData();
-    if (process.env.NODE_ENV === "production") {
+    if (!isDevLike()) {
       if (!process.env.DATABASE_URL) {
         throw new Error(
           "[TenantStorage FATAL] DATABASE_URL is not configured in production mode. Refusing to fallback to local JSON file."
         );
       }
+      this.data = loadInitialData();
       console.log(`[TenantStorage] Running in production mode with DATABASE_URL.`);
     } else {
+      this.data = loadInitialData();
       console.log(`[TenantStorage] Storage initialized. Dev fallback cache active (${getCacheFilePath()}).`);
     }
   }
@@ -270,13 +272,17 @@ class TenantStorage {
   }
 
   private async persistToDb<T>(table: any, values: any) {
+    if (isDbConnectionSkipped()) {
+      return;
+    }
     try {
       const db = await getDb();
       if (db) {
         await db.insert(table).values(values);
       }
     } catch (err) {
-      if (process.env.NODE_ENV === "production") {
+      recordDbFailure(err);
+      if (!isDevLike()) {
         console.error("[TenantStorage DB Write Failure]", err);
         throw err;
       } else {
@@ -306,6 +312,9 @@ class TenantStorage {
   }
 
   private save() {
+    if (!isDevLike()) {
+      return;
+    }
     try {
       const filePath = getCacheFilePath();
       const dir = path.dirname(filePath);
@@ -1145,22 +1154,48 @@ class TenantStorage {
       (this.data.integrationsConfig &&
         this.data.integrationsConfig[workspaceId]) ||
       {};
+    const isProduction = !isDevLike();
     const hasStripeEnv = Boolean(
       process.env.STRIPE_SECRET_KEY &&
         !process.env.STRIPE_SECRET_KEY.includes("placeholder")
     );
-    const hasShopifyEnv = Boolean(process.env.SHOPIFY_API_KEY);
+    const hasShopifyEnv = Boolean(
+      process.env.SHOPIFY_API_KEY &&
+        !process.env.SHOPIFY_API_KEY.includes("placeholder")
+    );
+    const hasSlackEnv = Boolean(
+      process.env.SLACK_WEBHOOK_URL &&
+        !process.env.SLACK_WEBHOOK_URL.includes("placeholder")
+    );
+    const hasCrmEnv = Boolean(
+      (process.env.HUBSPOT_ACCESS_TOKEN &&
+        !process.env.HUBSPOT_ACCESS_TOKEN.includes("placeholder")) ||
+        (process.env.SALESFORCE_ACCESS_TOKEN &&
+          !process.env.SALESFORCE_ACCESS_TOKEN.includes("placeholder"))
+    );
 
     return {
       stripe: wsConfig.stripe || {
-        connected: true,
+        connected: isProduction ? hasStripeEnv : true,
         mode: hasStripeEnv ? "live" : "mock",
-        lastSyncAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
+        lastSyncAt: !isProduction || hasStripeEnv
+          ? new Date(Date.now() - 48 * 3600 * 1000).toISOString()
+          : undefined,
       },
       shopify: wsConfig.shopify || {
-        connected: true,
+        connected: isProduction ? hasShopifyEnv : true,
         mode: hasShopifyEnv ? "live" : "mock",
-        lastSyncAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
+        lastSyncAt: !isProduction || hasShopifyEnv
+          ? new Date(Date.now() - 24 * 3600 * 1000).toISOString()
+          : undefined,
+      },
+      slack: wsConfig.slack || {
+        connected: isProduction ? hasSlackEnv : true,
+        mode: hasSlackEnv ? "live" : "mock",
+      },
+      crm: wsConfig.crm || {
+        connected: isProduction ? hasCrmEnv : true,
+        mode: hasCrmEnv ? "live" : "mock",
       },
     };
   }

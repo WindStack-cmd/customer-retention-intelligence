@@ -1,20 +1,94 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import mysql from "mysql2/promise";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let lastDbFailureTime = 0;
+const DB_FAILURE_COOLDOWN_MS = 60_000;
+const CONNECT_TIMEOUT_MS = 2000;
+
+export function isDbConnectionSkipped(): boolean {
+  if (
+    process.env.NODE_ENV === "test" ||
+    process.env.VITEST === "true" ||
+    process.env.SKIP_DB_CONNECTION === "true"
+  ) {
+    return true;
+  }
+  if (lastDbFailureTime > 0 && Date.now() - lastDbFailureTime < DB_FAILURE_COOLDOWN_MS) {
+    return true;
+  }
+  return false;
+}
+
+export function recordDbFailure(err?: unknown): void {
+  lastDbFailureTime = Date.now();
+  _db = null;
+  console.warn(
+    `[Database Fallback] MySQL unreachable (${(err as any)?.message ?? "connection failed"}). Remembering failure for 60s cooldown; skipping DB and using labelled dev fallback.`
+  );
+}
+
+export function resetDbFailureCooldown(): void {
+  lastDbFailureTime = 0;
+  _db = null;
+}
+
+// Shared fail-fast MySQL connection helper (2s timeout, 60s failure cooldown).
+export async function createFailFastMysqlConnection(): Promise<mysql.Connection | null> {
+  if (isDbConnectionSkipped()) {
+    return null;
+  }
+  if (!process.env.DATABASE_URL) {
+    return null;
+  }
+
+  try {
+    const conn = await Promise.race([
+      mysql.createConnection({
+        uri: process.env.DATABASE_URL,
+        connectTimeout: CONNECT_TIMEOUT_MS,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(`MySQL connection timeout (${CONNECT_TIMEOUT_MS}ms)`)
+            ),
+          CONNECT_TIMEOUT_MS
+        )
+      ),
+    ]);
+    await conn.ping();
+    lastDbFailureTime = 0;
+    return conn;
+  } catch (error) {
+    recordDbFailure(error);
+    return null;
+  }
+}
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
+// When MySQL is unreachable, uses a ~2s connect timeout and remembers failure for 60s.
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
+  if (isDbConnectionSkipped()) {
+    return null;
   }
+  if (!process.env.DATABASE_URL) {
+    return null;
+  }
+  if (_db) {
+    return _db;
+  }
+
+  const conn = await createFailFastMysqlConnection();
+  if (!conn) {
+    return null;
+  }
+  await conn.end().catch(() => {});
+  _db = drizzle(process.env.DATABASE_URL);
   return _db;
 }
 

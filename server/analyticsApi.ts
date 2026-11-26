@@ -1,4 +1,6 @@
-import mysql, { type RowDataPacket } from "mysql2/promise";
+import { type RowDataPacket } from "mysql2/promise";
+import type mysql from "mysql2/promise";
+import { createFailFastMysqlConnection, isDbConnectionSkipped } from "./db";
 import { z } from "zod";
 import {
   executiveOverviewFallback,
@@ -52,8 +54,16 @@ function asDate(value: unknown): string | null {
 }
 
 async function connection(): Promise<mysql.Connection> {
+  if (isDbConnectionSkipped()) {
+    throw new Error("Database connection skipped (in test or 60s cooldown)");
+  }
   if (!process.env.DATABASE_URL) throw new Error("Database is not configured");
-  return mysql.createConnection(process.env.DATABASE_URL);
+
+  const conn = await createFailFastMysqlConnection();
+  if (!conn) {
+    throw new Error("MySQL connection unavailable (fail-fast fallback active)");
+  }
+  return conn;
 }
 
 async function query<T extends DbRow = DbRow>(
